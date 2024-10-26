@@ -7,19 +7,6 @@
 #ifndef SERIALIZATION_H
 #define SERIALIZATION_H
 
-// STL
-#include <istream>
-#include <ostream>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-// rapid json
-#include <rapidjson/rapidjson.h>
-#define RAPIDJSON_DEFAULT_ALLOCATOR ::RAPIDJSON_NAMESPACE::MemoryPoolAllocator<RAPIDJSON_NAMESPACE::CrtAllocator>
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-
 // clang-format off
 
 #ifdef CXX_VERSION
@@ -91,6 +78,21 @@
 #endif
 
 // clang-format on
+
+// STL
+#include <istream>
+#include <ostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#ifdef HAS_CXX17
+#include <optional>
+#endif
+
+// rapid json
+#include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
+#include <rapidjson/stringbuffer.h>
 
 namespace serialization {
 
@@ -351,7 +353,7 @@ namespace serialization {
         template<class JsonValueType = rapidjson::Value>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            if (!jsonValue.template Is<Type>()) {
+            if (unlikely(!jsonValue.template Is<Type>())) {
                 if CONSTEXPR17 (details::is_same<Type, bool>::value) {
                     throw JsonSerializationTypeException("boolean", getJsonTypeStr(jsonValue.GetType()));
                 } else {
@@ -417,7 +419,7 @@ namespace serialization {
         template<class JsonValueType = rapidjson::Value>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            if (!jsonValue.IsString()) {
+            if (unlikely(!jsonValue.IsString())) {
                 throw JsonSerializationTypeException("string", getJsonTypeStr(jsonValue.GetType()));
             }
             t = jsonString2xstring<typename JsonValueType::EncodingType, typename Ch2EncodingType<Ch>::EncodingType>(jsonValue);
@@ -455,6 +457,8 @@ namespace serialization {
     template<class T>
     struct Codec<std::vector<T>> : BaseCodec<std::vector<T>> {
 
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+
         using Type = std::vector<T>;
 
         constexpr static bool enable = true;
@@ -473,7 +477,7 @@ namespace serialization {
         template<class JsonValueType = rapidjson::Value>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            if (!jsonValue.IsArray()) {
+            if (unlikely(!jsonValue.IsArray())) {
                 throw JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
             }
             t.reserve(jsonValue.Size());
@@ -515,6 +519,81 @@ namespace serialization {
             }
         }
     };
+
+#ifdef HAS_CXX17
+    template<class T>
+    struct Codec<std::optional<T>> {
+
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+
+        using Type = std::optional<T>;
+
+        constexpr static bool enable = true;
+
+        template<class JsonValueType = rapidjson::Value>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            Codec<T>::to_json(allocator, jsonValue, t.value());
+        }
+
+        template<class JsonValueType = rapidjson::Value>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            t = std::make_optional<T>();
+            Codec<T>::from_json(jsonValue, t.value());
+        }
+
+        template<class JsonValueType = rapidjson::Value>
+        static void to_json_member(typename JsonValueType::AllocatorType &allocator,
+                                   JsonValueType &jsonValue,
+                                   const std::basic_string<typename JsonValueType::Ch> &key,
+                                   const Type &t) {
+            assert(jsonValue.IsObject());
+            if (likely(t.has_value())) {
+                rapidjson::GenericValue<typename JsonValueType::EncodingType> value;
+                Codec<Type>::to_json(allocator, value, t);
+                jsonValue.AddMember(JsonValueType(key.c_str(), key.length(), allocator), value, allocator);
+            }
+        }
+
+        template<class JsonValueType = rapidjson::Value>
+        static void from_json_member(const JsonValueType &jsonValue,
+                                     const std::basic_string<typename JsonValueType::Ch> &key,
+                                     Type &t) {
+            assert(jsonValue.IsObject());
+            const typename JsonValueType::ConstMemberIterator &it = jsonValue.FindMember(key.c_str());
+            if (unlikely(it == jsonValue.MemberEnd())) {
+                t = std::nullopt;
+                return;
+            }
+            Codec<Type>::from_json(it->value, t);
+        }
+
+        template<bool isNeedConvert = false>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<bool>::to_binary<isNeedConvert>(ostream, t.has_value());
+            if (likely(t.has_value())) {
+                Codec<T>::to_binary<isNeedConvert>(ostream, t.value());
+            }
+        }
+
+        template<bool isNeedConvert = false>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            bool has_value;
+            Codec<bool>::from_binary<isNeedConvert>(istream, has_value);
+            if (likely(has_value)) {
+                t = std::make_optional<T>();
+                Codec<T>::from_binary<isNeedConvert>(istream, t.value());
+            } else {
+                t = std::nullopt;
+            }
+        }
+    };
+#endif
+
 }// namespace serialization
 
 #if false
