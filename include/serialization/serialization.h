@@ -463,6 +463,11 @@ namespace serialization {
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
+            for (const T &item: t) {
+                JsonValueType itemJsonValue;
+                Codec<T>::to_json(allocator, itemJsonValue, item);
+                jsonValue.PushBack(std::move(itemJsonValue), allocator);
+            }
         }
 
         template<class JsonValueType = rapidjson::Value>
@@ -470,6 +475,12 @@ namespace serialization {
                               Type &t) {
             if (!jsonValue.IsArray()) {
                 throw JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
+            }
+            t.reserve(jsonValue.Size());
+            for (const auto &item: jsonValue.GetArray()) {
+                T item1;
+                Codec<T>::from_json(item, item1);
+                t.push_back(std::move(item1));
             }
         }
 
@@ -499,7 +510,7 @@ namespace serialization {
                 for (size_t i = 0; i < length; ++i) {
                     T item;
                     Codec<T>::template from_binary<isNeedConvert>(istream, item);
-                    t.push_back(item);
+                    t.push_back(std::move(item));
                 }
             }
         }

@@ -14,9 +14,10 @@ class Person1 {// NOLINT(*-pro-type-member-init)
 public:
     std::string name = "Tom";
     int32_t age;
+    std::vector<int> aaa;
 };
 
-CODEC(Person1, name, age)
+CODEC(Person1, name, age, aaa)
 
 int main(int argc, char *argv[]) {
     rapidjson::Document document;
