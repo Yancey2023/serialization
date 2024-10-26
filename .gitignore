@@ -1,0 +1,7 @@
+# build directory
+/cmake-build-debug
+/cmake-build-release
+
+# IDE
+/.vscode
+/.idea
