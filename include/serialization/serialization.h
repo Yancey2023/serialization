@@ -84,6 +84,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #ifdef HAS_CXX17
 #include <optional>
@@ -274,21 +275,15 @@ namespace serialization {
         }
     }
 
-    template<class Ch>
-    class JsonSerializationKeyException final : std::runtime_error {
-        std::basic_string<Ch> key_;
-
+    class JsonSerializationKeyException final : public std::runtime_error {
     public:
+        template<class Ch>
         explicit JsonSerializationKeyException(const std::basic_string<Ch> &key)
             : std::runtime_error("fail to find json value by key: " +
-                                 (key_ = xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(key))) {}
-
-        const std::basic_string<Ch> &key() const {
-            return key_;
-        }
+                                 xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(key)) {}
     };
 
-    class JsonSerializationTypeException final : std::runtime_error {
+    class JsonSerializationTypeException final : public std::runtime_error {
     public:
         explicit JsonSerializationTypeException(const char *expect_type, const char *current_type)
             : std::runtime_error(std::string("json type error, expect type \"")
@@ -330,7 +325,7 @@ namespace serialization {
             assert(jsonValue.IsObject());
             const typename JsonValueType::ConstMemberIterator &it = jsonValue.FindMember(key.c_str());
             if (unlikely(it == jsonValue.MemberEnd())) {
-                throw JsonSerializationKeyException<typename JsonValueType::Ch>(key);
+                throw JsonSerializationKeyException(key);
             }
             Codec<Type>::from_json(it->value, t);
         }
@@ -467,6 +462,8 @@ namespace serialization {
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
+            jsonValue.SetArray();
+            jsonValue.GetArray().Reserve(t.size(), allocator);
             for (const T &item: t) {
                 JsonValueType itemJsonValue;
                 Codec<T>::to_json(allocator, itemJsonValue, item);
@@ -534,6 +531,7 @@ namespace serialization {
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
+            assert(t.has_value());
             Codec<T>::to_json(allocator, jsonValue, t.value());
         }
 
@@ -593,6 +591,73 @@ namespace serialization {
         }
     };
 #endif
+
+    template<class Ch, class T>
+    struct Codec<std::unordered_map<std::basic_string<Ch>, T>> : BaseCodec<std::unordered_map<std::basic_string<Ch>, T>> {
+
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+
+        using Type = std::unordered_map<std::basic_string<Ch>, T>;
+
+        constexpr static bool enable = true;
+
+        template<class JsonValueType = rapidjson::Value>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            jsonValue.SetObject();
+            for (const auto &item: t) {
+                JsonValueType key;
+                Codec<std::basic_string<Ch>>::to_json(allocator, key, item.first);
+                JsonValueType value;
+                Codec<T>::to_json(allocator, value, item.second);
+                jsonValue.AddMember(key, value, allocator);
+            }
+        }
+
+        template<class JsonValueType = rapidjson::Value>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            if (unlikely(!jsonValue.IsObject())) {
+                throw JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
+            }
+            t.reserve(jsonValue.MemberCount());
+            auto begin = jsonValue.MemberBegin();
+            auto end = jsonValue.MemberEnd();
+            for (typename JsonValueType::MemberIterator it = begin; it < end; ++it) {
+                std::basic_string<Ch> key;
+                Codec<std::basic_string<Ch>>::from_json(it->name, key);
+                T value;
+                Codec<T>::from_json(it->value, value);
+                t.emplace(std::move(key), std::move(value));
+            }
+        }
+
+        template<bool isNeedConvert = false>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<uint32_t>::to_binary<isNeedConvert>(ostream, t.length());
+            for (const auto &item: t) {
+                Codec<std::basic_string<Ch>>::template to_binary<isNeedConvert>(ostream, item.first);
+                Codec<T>::template to_binary<isNeedConvert>(ostream, item.second);
+            }
+        }
+
+        template<bool isNeedConvert = false>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            size_t length;
+            Codec<uint32_t>::from_binary<isNeedConvert>(istream, length);
+            t.reserve(length);
+            for (size_t i = 0; i < length; ++i) {
+                std::basic_string<Ch> key;
+                Codec<std::basic_string<Ch>>::template from_binary<isNeedConvert>(istream, key);
+                T value;
+                Codec<T>::template from_binary<isNeedConvert>(istream, value);
+                t.emplace(std::move(key), std::move(value));
+            }
+        }
+    };
 
 }// namespace serialization
 
@@ -808,6 +873,7 @@ namespace serialization {
                                 const Type &t) {                                                                           \
                 static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
                 CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                              \
+                jsonValue.SetObject();                                                                                     \
                 CODEC_PASTE(CODEC_TO_JSON_MEMBER, __VA_ARGS__)                                                             \
             }                                                                                                              \
                                                                                                                            \
@@ -815,6 +881,9 @@ namespace serialization {
             static void from_json(const JsonValueType &jsonValue,                                                          \
                                   Type &t) {                                                                               \
                 static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
+                if (unlikely(!jsonValue.IsObject())) {                                                                     \
+                    throw JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));                   \
+                }                                                                                                          \
                 CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                              \
                 CODEC_PASTE(CODEC_FROM_JSON_MEMBER, __VA_ARGS__)                                                           \
             }                                                                                                              \
