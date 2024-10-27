@@ -6,8 +6,6 @@ serialization library for C++. It support json format and binary format.
 
 ## Get start
 
-Person.h
-
 ```cpp
 #include <string>
 #include <vector>
@@ -19,31 +17,17 @@ namespace exmaple {
         int age;
     };
 
-    CODEC_H(Person)
-
 }
+
+CODEC_H(exmaple::Person)
 ```
 
-Person.cpp
+## TODO
 
-```cpp
-#include "Person.h
+1. macro: SERIALIZATION_ONLY_READ_FROM_BINARY
+2. cmake target: serialization_only_read_from_binary
+3. util: JsonUtil, BinaryUtil (or add in BasicCodec?)
+4, change: use char* instead object key std::string
 
-namespace exmaple {
-    
-    CODEC(Person, name, age)
-    
-}
-```
 
-main.cpp
 
-```cpp
-#include <Person.h>
-
-int main() {
-    Person person;
-    person
-    JsonUtil.encode(person);
-}
-```

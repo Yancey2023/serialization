@@ -11,24 +11,27 @@
 #include <serialization/serialization.h>
 #include <string>
 
-class Person1 {// NOLINT(*-pro-type-member-init)
-public:
-    std::string name = "Tom";
-    int32_t age;
-    std::vector<int> aaa;
-};
+namespace example {
+    class Person1 {// NOLINT(*-pro-type-member-init)
+    public:
+        std::string name = "Tom";
+        int32_t age;
+        std::vector<int> aaa;
+    };
+}
 
-CODEC(Person1, name, age, aaa)
+CODEC(example::Person1, name, age, aaa)
 
 int main(int argc, char *argv[]) {
     try {
+        // rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
         rapidjson::Document document;
-        document.Parse(R"({"age":18, "name":"Tom", "aaa": [1, 2, 3]})");
-        Person1 person;// NOLINT(*-pro-type-member-init)
+        // document.ParseStream();
+        example::Person1 person;
         if (document.HasParseError()) {
             throw std::runtime_error("json parse error");
         }
-        serialization::Codec<Person1>::from_json(document, person);
+        serialization::Codec<example::Person1>::from_json(document, person);
         assert(person.name == "Tom");
         assert(person.age == 18);
     } catch (serialization::JsonSerializationKeyException &err) {

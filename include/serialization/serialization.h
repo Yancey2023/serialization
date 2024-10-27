@@ -80,6 +80,7 @@
 // clang-format on
 
 // STL
+#include <cstdint>
 #include <istream>
 #include <ostream>
 #include <stdexcept>
@@ -91,9 +92,11 @@
 #endif
 
 // rapid json
+#ifndef SERIALIZATION_ONLY_READ_FROM_BINARY
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
+#endif
 
 namespace serialization {
 
@@ -803,8 +806,6 @@ namespace serialization {
 #define CODEC_PASTE63(func, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62) CODEC_PASTE2(func, v1) CODEC_PASTE62(func, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62)
 #define CODEC_PASTE64(func, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63) CODEC_PASTE2(func, v1) CODEC_PASTE63(func, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63)
 
-// clang-format off
-
 #define CODEC_JSON_KEY_CHAR(v1) \
     static const char *v1() { return #v1; }
 #define CODEC_JSON_KEY_CHAR16(v1) \
@@ -814,7 +815,7 @@ namespace serialization {
 #define CODEC_JSON_KEY_WCHAR(v1) \
     static const wchar_t *v1() { return L## #v1; }
 #define CODEC_STATIC_ASSERT(v1) \
-    static_assert(Codec<decltype(t.v1)>::enable, "fail to find impl of Codec");
+    static_assert(Codec<decltype(std::declval<Type>().v1)>::enable, "fail to find impl of Codec");
 #define CODEC_TO_JSON_MEMBER(v1) \
     Codec<decltype(t.v1)>::template to_json_member<JsonValueType>(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
 #define CODEC_FROM_JSON_MEMBER(v1) \
@@ -824,25 +825,24 @@ namespace serialization {
 #define CODEC_FROM_BINARY(v1) \
     Codec<decltype(t.v1)>::template from_binary<isNeedConvert>(istream, t.v1);
 
-// clang-format on
-
-#ifdef HAS_CXX11
-#define CODEC_JSON_KEY_CXX11(CodecType, ...)            \
-    template<>                                          \
-    struct JsonKey<CodecType, char16_t> {               \
-        constexpr static bool enable = true;            \
-        CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__) \
-    };                                                  \
-                                                        \
-    template<>                                          \
-    struct JsonKey<CodecType, char32_t> {               \
-        constexpr static bool enable = true;            \
-        CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__) \
+#ifdef SERIALIZATION_ONLY_READ_FROM_BINARY
+#define CODEC(CodecType, ...)                                                      \
+    template<>                                                                     \
+    struct serialization::Codec<CodecType> : serialization::BaseCodec<CodecType> { \
+                                                                                   \
+        using Type = CodecType;                                                    \
+                                                                                   \
+        CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                              \
+                                                                                   \
+        constexpr static bool enable = true;                                       \
+                                                                                   \
+        template<bool isNeedConvert>                                               \
+        static void from_binary(std::istream &istream,                             \
+                                Type &t) {                                         \
+            CODEC_PASTE(CODEC_FROM_BINARY, __VA_ARGS__)                            \
+        }                                                                          \
     };
 #else
-#define CODEC_JSON_KEY_CXX11(CodecType, ...)
-#endif
-
 #define CODEC(CodecType, ...)                                                                                              \
     namespace serialization {                                                                                              \
                                                                                                                            \
@@ -854,7 +854,17 @@ namespace serialization {
                 CODEC_PASTE(CODEC_JSON_KEY_CHAR, __VA_ARGS__)                                                              \
             };                                                                                                             \
                                                                                                                            \
-            CODEC_JSON_KEY_CXX11(CodecType, ...)                                                                           \
+            template<>                                                                                                     \
+            struct JsonKey<CodecType, char16_t> {                                                                          \
+                constexpr static bool enable = true;                                                                       \
+                CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__)                                                            \
+            };                                                                                                             \
+                                                                                                                           \
+            template<>                                                                                                     \
+            struct JsonKey<CodecType, char32_t> {                                                                          \
+                constexpr static bool enable = true;                                                                       \
+                CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__)                                                            \
+            };                                                                                                             \
                                                                                                                            \
             template<>                                                                                                     \
             struct JsonKey<CodecType, wchar_t> {                                                                           \
@@ -862,17 +872,21 @@ namespace serialization {
                 CODEC_PASTE(CODEC_JSON_KEY_WCHAR, __VA_ARGS__)                                                             \
             };                                                                                                             \
         }                                                                                                                  \
+                                                                                                                           \
         template<>                                                                                                         \
         struct Codec<CodecType> : BaseCodec<CodecType> {                                                                   \
                                                                                                                            \
             using Type = CodecType;                                                                                        \
+                                                                                                                           \
+            CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                                  \
+                                                                                                                           \
+            constexpr static bool enable = true;                                                                           \
                                                                                                                            \
             template<typename JsonValueType>                                                                               \
             static void to_json(typename JsonValueType::AllocatorType &allocator,                                          \
                                 JsonValueType &jsonValue,                                                                  \
                                 const Type &t) {                                                                           \
                 static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
-                CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                              \
                 jsonValue.SetObject();                                                                                     \
                 CODEC_PASTE(CODEC_TO_JSON_MEMBER, __VA_ARGS__)                                                             \
             }                                                                                                              \
@@ -884,24 +898,22 @@ namespace serialization {
                 if (unlikely(!jsonValue.IsObject())) {                                                                     \
                     throw JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));                   \
                 }                                                                                                          \
-                CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                              \
                 CODEC_PASTE(CODEC_FROM_JSON_MEMBER, __VA_ARGS__)                                                           \
             }                                                                                                              \
                                                                                                                            \
             template<bool isNeedConvert>                                                                                   \
             static void to_binary(std::ostream &ostream,                                                                   \
                                   const Type &t) {                                                                         \
-                CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                              \
                 CODEC_PASTE(CODEC_TO_BINARY, __VA_ARGS__)                                                                  \
             }                                                                                                              \
                                                                                                                            \
             template<bool isNeedConvert>                                                                                   \
             static void from_binary(std::istream &istream,                                                                 \
                                     Type &t) {                                                                             \
-                CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                              \
                 CODEC_PASTE(CODEC_FROM_BINARY, __VA_ARGS__)                                                                \
             }                                                                                                              \
         };                                                                                                                 \
     }
+#endif
 
 #endif//SERIALIZATION_H
