@@ -12,10 +12,10 @@
 #ifdef CXX_VERSION
     #undef CXX_VERSION
 #endif
-#ifndef _MSC_VER
-    #define CXX_VERSION __cplusplus
+#ifdef _MSC_VER
+    #define CXX_VERSION _MSVC_LANG
 #else
-    #define CXX_VERSION __cpp_variadic_templates
+    #define CXX_VERSION __cplusplus
 #endif
 
 #ifdef HAS_CXX14
@@ -53,7 +53,7 @@
     #define likely(expr)   __builtin_expect(!!(expr), 1)
     #define unlikely(expr) __builtin_expect(!!(expr), 0)
 #else
-    #define likely(expr)   (!!(expr)
+    #define likely(expr)   (!!(expr))
     #define unlikely(expr) (!!(expr))
 #endif
 
@@ -88,28 +88,31 @@
 #include <unordered_map>
 #include <vector>
 #ifdef HAS_CXX17
+#include <filesystem>
 #include <optional>
 #endif
 
 // rapid json
-#ifndef SERIALIZATION_ONLY_READ_FROM_BINARY
 #include <rapidjson/document.h>
+#include <rapidjson/filereadstream.h>
+#include <rapidjson/filewritestream.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
-#endif
+#include <rapidjson/writer.h>
 
 namespace serialization {
-
     namespace details {
 
         template<class T, T Val>
         struct integral_constant {
             static constexpr T value = Val;
 
+            // ReSharper disable once CppRedundantInlineSpecifier
             CONSTEXPR20 explicit operator T() const noexcept {
                 return value;
             }
 
+            // ReSharper disable once CppRedundantInlineSpecifier
             CONSTEXPR20 T operator()() const noexcept {
                 return value;
             }
@@ -139,43 +142,73 @@ namespace serialization {
         struct is_same<T, T> : true_type {};
 
         template<class T>
-        struct is_bool_or_number : false_type {};
+        struct is_integer : false_type {};
 
         template<>
-        struct is_bool_or_number<uint8_t> : true_type {};
+        struct is_integer<uint8_t> : true_type {
+            using RapidJsonTypeHelperType = unsigned;
+        };
 
         template<>
-        struct is_bool_or_number<int8_t> : true_type {};
+        struct is_integer<int8_t> : true_type {
+            using RapidJsonTypeHelperType = int;
+        };
 
         template<>
-        struct is_bool_or_number<uint16_t> : true_type {};
+        struct is_integer<uint16_t> : true_type {
+            using RapidJsonTypeHelperType = unsigned;
+        };
 
         template<>
-        struct is_bool_or_number<int16_t> : true_type {};
+        struct is_integer<int16_t> : true_type {
+            using RapidJsonTypeHelperType = int;
+        };
 
         template<>
-        struct is_bool_or_number<uint32_t> : true_type {};
+        struct is_integer<uint32_t> : true_type {
+            using RapidJsonTypeHelperType = unsigned;
+        };
 
         template<>
-        struct is_bool_or_number<int32_t> : true_type {};
+        struct is_integer<int32_t> : true_type {
+            using RapidJsonTypeHelperType = int;
+        };
 
         template<>
-        struct is_bool_or_number<uint64_t> : true_type {};
+        struct is_integer<uint64_t> : true_type {
+            using RapidJsonTypeHelperType = unsigned;
+        };
 
         template<>
-        struct is_bool_or_number<int64_t> : true_type {};
+        struct is_integer<int64_t> : true_type {
+            using RapidJsonTypeHelperType = int;
+        };
+
+        template<class T>
+        struct is_number : is_integer<T> {};
 
         template<>
-        struct is_bool_or_number<bool> : true_type {};
+        struct is_number<float> : true_type {
+            using RapidJsonTypeHelperType = float;
+        };
 
         template<>
-        struct is_bool_or_number<float> : true_type {};
+        struct is_number<double> : true_type {
+            using RapidJsonTypeHelperType = double;
+        };
 
         template<>
-        struct is_bool_or_number<double> : true_type {};
+        struct is_number<long double> : true_type {
+            using RapidJsonTypeHelperType = double;
+        };
+
+        template<class T>
+        struct is_bool_or_number : is_number<T> {};
 
         template<>
-        struct is_bool_or_number<long double> : true_type {};
+        struct is_bool_or_number<bool> : true_type {
+            using RapidJsonTypeHelperType = bool;
+        };
 
         template<class T, class Ch>
         struct JsonKey {
@@ -206,56 +239,82 @@ namespace serialization {
     };
 #endif
 
-    template<class sourceEncoding, class targetEncoding>
-    std::basic_string<typename targetEncoding::Ch> xstring2xstring(const std::basic_string<typename sourceEncoding::Ch> &xstring) {
-        if CONSTEXPR17 (details::is_same<typename sourceEncoding::Ch, typename targetEncoding::Ch>::value) {
+    template<class SourceEncoding, class TargetEncoding>
+    std::basic_string<typename TargetEncoding::Ch> xstring2xstring(const std::basic_string<typename SourceEncoding::Ch> &xstring) {
+        if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename TargetEncoding::Ch>::value) {
             return xstring;
         }
-        rapidjson::GenericStringStream<sourceEncoding> source(xstring.data());
-        rapidjson::GenericStringBuffer<targetEncoding> target;
+        rapidjson::GenericStringStream<SourceEncoding> source(xstring.data());
+        rapidjson::GenericStringBuffer<TargetEncoding> target;
         while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<sourceEncoding, targetEncoding>::Transcode(source, target)) {
-                assert(false);
-                return std::basic_string<typename targetEncoding::Ch>();
+            if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
+#ifdef CHelperDebug
+                throw std::runtime_error("fail to transform string");
+#endif
+                // ReSharper disable once CppDFAUnreachableCode
+                return std::basic_string<typename TargetEncoding::Ch>();
             }
         }
-        return std::basic_string<typename targetEncoding::Ch>(target.GetString(), target.GetLength());
+        return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
     }
 
-    template<class sourceEncoding, class targetEncoding>
-    std::basic_string<typename targetEncoding::Ch> jsonString2xstring(const rapidjson::GenericValue<sourceEncoding> &jsonString) {
-        if CONSTEXPR17 (details::is_same<typename sourceEncoding::Ch, typename targetEncoding::Ch>::value) {
-            return std::basic_string<typename targetEncoding::Ch>(
+    template<class SourceEncoding, class TargetEncoding>
+    std::basic_string<typename TargetEncoding::Ch> xstring2xstring(const typename SourceEncoding::Ch *xstring) {
+        if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename TargetEncoding::Ch>::value) {
+            return std::basic_string<typename SourceEncoding::Ch>(xstring);
+        }
+        rapidjson::GenericStringStream<SourceEncoding> source(xstring);
+        rapidjson::GenericStringBuffer<TargetEncoding> target;
+        while (source.Peek() != '\0') {
+            if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
+#ifdef CHelperDebug
+                throw std::runtime_error("fail to transform string");
+#endif
+                // ReSharper disable once CppDFAUnreachableCode
+                return std::basic_string<typename TargetEncoding::Ch>();
+            }
+        }
+        return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
+    }
+
+    template<class SourceEncoding, class TargetEncoding>
+    std::basic_string<typename TargetEncoding::Ch> jsonString2xstring(const rapidjson::GenericValue<SourceEncoding> &jsonString) {
+        if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename TargetEncoding::Ch>::value) {
+            return std::basic_string<typename TargetEncoding::Ch>(
                     // ReSharper disable once CppCStyleCast
-                    (typename targetEncoding::Ch *) jsonString.GetString(),
+                    (typename TargetEncoding::Ch *) jsonString.GetString(),
                     jsonString.GetStringLength());
         }
-        rapidjson::GenericStringStream<sourceEncoding> source(jsonString.GetString());
-        rapidjson::GenericStringBuffer<targetEncoding> target;
+        rapidjson::GenericStringStream<SourceEncoding> source(jsonString.GetString());
+        rapidjson::GenericStringBuffer<TargetEncoding> target;
         while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<sourceEncoding, targetEncoding>::Transcode(source, target)) {
-                assert(false);
-                return std::basic_string<typename targetEncoding::Ch>();
+            if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
+#ifdef CHelperDebug
+                throw std::runtime_error("fail to transform string");
+#endif
+                // ReSharper disable once CppDFAUnreachableCode
+                return std::basic_string<typename TargetEncoding::Ch>();
             }
         }
-        return std::basic_string<typename targetEncoding::Ch>(target.GetString(), target.GetLength());
+        return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
     }
 
-    template<class sourceEncoding, class targetEncoding>
-    rapidjson::GenericValue<targetEncoding> xstring2jsonString(typename targetEncoding::Allocator &allocator,
-                                                               const std::basic_string<typename sourceEncoding::Ch> &xstring) {
-        if CONSTEXPR17 (details::is_same<typename sourceEncoding::Ch, typename targetEncoding::Ch>::value) {
-            return rapidjson::GenericValue<targetEncoding>(xstring.data(), xstring.length(), allocator);
+    template<class SourceEncoding, class JsonValueType>
+    rapidjson::GenericValue<typename JsonValueType::EncodingType> xstring2jsonString(typename JsonValueType::AllocatorType &allocator,
+                                                                                     const std::basic_string<typename SourceEncoding::Ch> &xstring) {
+        if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename JsonValueType::Ch>::value) {
+            return rapidjson::GenericValue<typename JsonValueType::EncodingType>(xstring.data(), xstring.length(), allocator);
         }
-        rapidjson::GenericStringStream<sourceEncoding> source(xstring);
-        rapidjson::GenericStringBuffer<targetEncoding> target;
+        rapidjson::GenericStringStream<SourceEncoding> source(xstring.c_str());
+        rapidjson::GenericStringBuffer<typename JsonValueType::EncodingType> target;
         while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<sourceEncoding, targetEncoding>::Transcode(source, target)) {
+            if (!rapidjson::Transcoder<SourceEncoding, typename JsonValueType::EncodingType>::Transcode(source, target)) {
                 assert(false);
-                return std::basic_string<typename targetEncoding::Ch>();
+                // ReSharper disable once CppDFAUnreachableCode
+                return rapidjson::GenericValue<typename JsonValueType::EncodingType>();
             }
         }
-        return rapidjson::GenericValue<targetEncoding>(target.GetString(), target.GetLength(), allocator);
+        return typename JsonValueType::ValueType(target.GetString(), target.GetLength(), allocator);
     }
 
     inline const char *getJsonTypeStr(const rapidjson::Type type) {
@@ -278,23 +337,70 @@ namespace serialization {
         }
     }
 
-    class JsonSerializationKeyException final : public std::runtime_error {
-    public:
-        template<class Ch>
-        explicit JsonSerializationKeyException(const std::basic_string<Ch> &key)
-            : std::runtime_error("fail to find json value by key: " +
-                                 xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(key)) {}
-    };
+    namespace exceptions {
 
-    class JsonSerializationTypeException final : public std::runtime_error {
-    public:
-        explicit JsonSerializationTypeException(const char *expect_type, const char *current_type)
-            : std::runtime_error(std::string("json type error, expect type \"")
-                                         .append(expect_type)
-                                         .append("\", but find \"")
-                                         .append(current_type)
-                                         .append("\"")) {}
-    };
+        class JsonSerializationKeyException final : public std::runtime_error {
+        public:
+            template<class Ch>
+            explicit JsonSerializationKeyException(const std::basic_string<Ch> &key)
+                : std::runtime_error("fail to find json value by key: " +
+                                     xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(key)) {}
+
+            template<class Ch>
+            explicit JsonSerializationKeyException(const Ch *key)
+                : std::runtime_error("fail to find json value by key: " +
+                                     xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(key)) {}
+        };
+
+        class JsonSerializationTypeException final : public std::runtime_error {
+        public:
+            explicit JsonSerializationTypeException(const char *expect_type, const char *current_type)
+                : std::runtime_error(std::string("json type error, expect type \"")
+                                             .append(expect_type)
+                                             .append("\", but find \"")
+                                             .append(current_type)
+                                             .append("\"")) {}
+        };
+
+        class OpenFileException final : public std::runtime_error {
+        public:
+            explicit OpenFileException(const char *path, const char *mode, const errno_t err)
+                : std::runtime_error(std::string("fail to open file with mode \"")
+                                             .append(mode)
+                                             .append("\", error code is ")
+                                             .append(std::to_string(err))
+                                             .append(": ")
+                                             .append(path)) {}
+        };
+
+    }// namespace exceptions
+
+    template<class JsonValueType>
+    const typename JsonValueType::ValueType &find_member_or_throw(
+            const JsonValueType &jsonValue,
+            const typename JsonValueType::Ch *key) {
+        assert(jsonValue.IsObject());
+        const typename JsonValueType::ConstMemberIterator it = jsonValue.FindMember(key);
+        if (unlikely(it == jsonValue.MemberEnd())) {
+            throw exceptions::JsonSerializationKeyException(key);
+        }
+        return it->value;
+    }
+
+    template<class JsonValueType>
+    const typename JsonValueType::ValueType &check_array_or_throw(const JsonValueType &jsonValue) {
+        if (unlikely(!jsonValue.IsArray())) {
+            throw exceptions::JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
+        }
+        return jsonValue;
+    }
+
+    template<class JsonValueType>
+    typename JsonValueType::ConstArray find_array_member_or_throw(
+            const JsonValueType &jsonValue,
+            const typename JsonValueType::Ch *key) {
+        return check_array_or_throw(find_member_or_throw(jsonValue, key)).GetArray();
+    }
 
     template<class T, class = void>
     struct Codec {
@@ -304,33 +410,179 @@ namespace serialization {
         constexpr static bool enable = false;
     };
 
+    template<typename T>
+    struct Codec<const T> : Codec<T> {
+    };
+
+    template<typename T>
+    struct Codec<T &> : Codec<T> {
+    };
+
+    template<typename T>
+    struct Codec<const T &> : Codec<T> {
+    };
+
     template<class T>
     struct BaseCodec {
 
         using Type = T;
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json_member(typename JsonValueType::AllocatorType &allocator,
                                    JsonValueType &jsonValue,
-                                   const std::basic_string<typename JsonValueType::Ch> &key,
+                                   const typename JsonValueType::Ch *key,
                                    const Type &t) {
             assert(jsonValue.IsObject());
-            rapidjson::GenericValue<typename JsonValueType::EncodingType> value;
-            Codec<Type>::to_json(allocator, value, t);
-            jsonValue.AddMember(JsonValueType(key.c_str(), key.length(), allocator), value, allocator);
+            typename JsonValueType::ValueType value;
+            Codec<Type>::template to_json(allocator, value, t);
+            assert(!value.IsNull());
+            jsonValue.AddMember(typename JsonValueType::ValueType(key, allocator), std::move(value), allocator);
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json_member(const JsonValueType &jsonValue,
-                                     const std::basic_string<typename JsonValueType::Ch> &key,
+                                     const typename JsonValueType::Ch *key,
                                      Type &t) {
             static_assert(Codec<Type>::enable, "fail to find impl of Codec");
             assert(jsonValue.IsObject());
-            const typename JsonValueType::ConstMemberIterator &it = jsonValue.FindMember(key.c_str());
-            if (unlikely(it == jsonValue.MemberEnd())) {
-                throw JsonSerializationKeyException(key);
+            Codec<Type>::template from_json(find_member_or_throw(jsonValue, key), t);
+        }
+    };
+
+    template<typename ChildType, typename ParentType>
+    struct WrappedCodec {
+
+        using Type = ChildType;
+
+        constexpr static bool enable = false;
+
+        static_assert(Codec<ParentType>::enable, "fail to find impl of Codec");
+
+        template<class JsonValueType>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            Codec<ParentType>::template to_json(allocator, jsonValue, static_cast<const ParentType &>(t));
+        }
+
+        template<class JsonValueType>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            Codec<ParentType>::template from_json(jsonValue, static_cast<ParentType &>(t));
+        }
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<ParentType>::template to_binary<isNeedConvert>(ostream, static_cast<const ParentType &>(t));
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            Codec<ParentType>::template from_binary<isNeedConvert>(istream, static_cast<ParentType &>(t));
+        }
+    };
+
+    template<typename ChildType>
+    struct WrappedCodec<ChildType, void> {
+
+        using Type = ChildType;
+
+        constexpr static bool enable = false;
+
+        template<class JsonValueType>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            jsonValue.SetObject();
+        }
+
+        template<class JsonValueType>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            if (unlikely(!jsonValue.IsObject())) {
+                throw exceptions::JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
             }
-            Codec<Type>::from_json(it->value, t);
+        }
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+        }
+    };
+
+    template<class T>
+    struct BaseUniquePtrCodec : BaseCodec<std::unique_ptr<T>> {
+
+        using Type = std::unique_ptr<T>;
+
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+
+        template<class JsonValueType>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            Codec<T>::template to_json<JsonValueType>(allocator, jsonValue, *t);
+        }
+
+        template<class JsonValueType>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            t = std::make_unique<T>();
+            Codec<T>::template from_json<JsonValueType>(jsonValue, *t);
+        }
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<T>::template to_binary<isNeedConvert>(ostream, *t);
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            t = std::make_unique<T>();
+            Codec<T>::template from_binary<isNeedConvert>(istream, *t);
+        }
+    };
+
+    template<class T, class S>
+    struct BaseEnumCodec : BaseCodec<T> {
+
+        using Type = T;
+
+        static_assert(std::is_enum_v<T>, "must be an enum!");
+        static_assert(details::is_integer<S>::value, "must be an integer!");
+
+        template<class JsonValueType>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            Codec<S>::template to_json(allocator, jsonValue, reinterpret_cast<const S &>(t));
+        }
+
+        template<class JsonValueType>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            Codec<S>::template from_json(jsonValue, reinterpret_cast<S &>(t));
+        }
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<S>::template to_binary<isNeedConvert>(ostream, reinterpret_cast<const S &>(t));
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            Codec<S>::template from_binary<isNeedConvert>(istream, reinterpret_cast<S &>(t));
         }
     };
 
@@ -338,27 +590,33 @@ namespace serialization {
     struct Codec<T, details::enable_if_t<details::is_bool_or_number<T>::value>> : BaseCodec<T> {
 
         using Type = T;
+        using RapidJsonTypeHelperType = typename details::is_bool_or_number<T>::RapidJsonTypeHelperType;
 
         constexpr static bool enable = true;
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
-            jsonValue.template Set<Type>(t, allocator);
+            jsonValue.template Set<RapidJsonTypeHelperType>(static_cast<RapidJsonTypeHelperType>(t), allocator);
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            if (unlikely(!jsonValue.template Is<Type>())) {
+            RapidJsonTypeHelperType a = 1;
+            if (unlikely(!(static_cast<bool>(details::is_same<Type, float>::value)
+                                   ? jsonValue.IsLosslessFloat()
+                           : static_cast<bool>(details::is_same<Type, double>::value)
+                                   ? jsonValue.IsLosslessDouble()
+                                   : jsonValue.template Is<RapidJsonTypeHelperType>()))) {
                 if CONSTEXPR17 (details::is_same<Type, bool>::value) {
-                    throw JsonSerializationTypeException("boolean", getJsonTypeStr(jsonValue.GetType()));
+                    throw exceptions::JsonSerializationTypeException("boolean", getJsonTypeStr(jsonValue.GetType()));
                 } else {
-                    throw JsonSerializationTypeException("number", getJsonTypeStr(jsonValue.GetType()));
+                    throw exceptions::JsonSerializationTypeException("number", getJsonTypeStr(jsonValue.GetType()));
                 }
             }
-            t = jsonValue.template Get<Type>();
+            t = static_cast<Type>(jsonValue.template Get<RapidJsonTypeHelperType>());
         }
 
         template<bool isNeedConvert>
@@ -402,52 +660,52 @@ namespace serialization {
 
     template<class Ch>
     struct Codec<std::basic_string<Ch>> : BaseCodec<std::basic_string<Ch>> {
-
         using Type = std::basic_string<Ch>;
 
         constexpr static bool enable = true;
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
-            jsonValue = xstring2jsonString<Ch2EncodingType<Ch>::EncodingType, JsonValueType::EncodingType>(allocator, t);
+            jsonValue = xstring2jsonString<typename Ch2EncodingType<Ch>::EncodingType, JsonValueType>(allocator, t);
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             if (unlikely(!jsonValue.IsString())) {
-                throw JsonSerializationTypeException("string", getJsonTypeStr(jsonValue.GetType()));
+                throw exceptions::JsonSerializationTypeException("string", getJsonTypeStr(jsonValue.GetType()));
             }
             t = jsonString2xstring<typename JsonValueType::EncodingType, typename Ch2EncodingType<Ch>::EncodingType>(jsonValue);
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::to_binary<isNeedConvert>(ostream, t.length());
-            if CONSTEXPR17 (isNeedConvert && sizeof(Ch) > 1) {
-                for (const Ch &ch: t) {
-                    Codec<uint32_t>::to_binary<isNeedConvert>(ostream, ch);
-                }
+            if CONSTEXPR17 (details::is_same<Ch, char>::value) {
+                Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.length());
+                ostream.write(reinterpret_cast<const char *>(t.data()), t.length());
             } else {
-                ostream.write(reinterpret_cast<const char *>(t.data()), t.length() * sizeof(Ch));
+                std::string str = xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(t);
+                Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, str.length());
+                ostream.write(str.data(), static_cast<std::streamsize>(str.length()));
             }
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
-            size_t length;
-            Codec<uint32_t>::from_binary<isNeedConvert>(istream, length);
-            t.resize(length);
-            if CONSTEXPR17 (isNeedConvert && sizeof(t) > 1) {
-                for (int i = 0; i < length; ++i) {
-                    Codec<uint32_t>::from_binary<isNeedConvert>(istream, t[i]);
-                }
+            uint32_t length;
+            Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
+            if CONSTEXPR17 (details::is_same<Ch, char>::value) {
+                t.resize(length);
+                istream.read(reinterpret_cast<char *>(t.data()), length);
             } else {
-                istream.read(reinterpret_cast<char *>(t.data()), static_cast<std::streamsize>(length * sizeof(Ch)));
+                std::string str;
+                str.resize(length);
+                istream.read(str.data(), length);
+                t = xstring2xstring<Ch2EncodingType<char>::EncodingType, typename Ch2EncodingType<Ch>::EncodingType>(str);
             }
         }
     };
@@ -461,7 +719,7 @@ namespace serialization {
 
         constexpr static bool enable = true;
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
@@ -469,31 +727,31 @@ namespace serialization {
             jsonValue.GetArray().Reserve(t.size(), allocator);
             for (const T &item: t) {
                 JsonValueType itemJsonValue;
-                Codec<T>::to_json(allocator, itemJsonValue, item);
+                Codec<T>::template to_json(allocator, itemJsonValue, item);
                 jsonValue.PushBack(std::move(itemJsonValue), allocator);
             }
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             if (unlikely(!jsonValue.IsArray())) {
-                throw JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
+                throw exceptions::JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
             }
             t.reserve(jsonValue.Size());
             for (const auto &item: jsonValue.GetArray()) {
                 T item1;
-                Codec<T>::from_json(item, item1);
+                Codec<T>::template from_json(item, item1);
                 t.push_back(std::move(item1));
             }
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::to_binary<isNeedConvert>(ostream, t.length());
-            if CONSTEXPR17 ((!isNeedConvert || sizeof(T) <= 1) && details::is_bool_or_number<T>::value) {
-                ostream.write(reinterpret_cast<const char *>(t.data()), t.length() * sizeof(T));
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
+            if CONSTEXPR17 ((!isNeedConvert || sizeof(T) <= 1) && details::is_number<T>::value) {
+                ostream.write(reinterpret_cast<const char *>(t.data()), t.size() * sizeof(T));
             } else {
                 for (const T &item: t) {
                     Codec<T>::template to_binary<isNeedConvert>(ostream, item);
@@ -501,17 +759,17 @@ namespace serialization {
             }
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
-            size_t length;
-            Codec<uint32_t>::from_binary<isNeedConvert>(istream, length);
-            if CONSTEXPR17 ((!isNeedConvert || sizeof(T) <= 1) && details::is_bool_or_number<T>::value) {
+            uint32_t length;
+            Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
+            if CONSTEXPR17 ((!isNeedConvert || sizeof(T) <= 1) && details::is_number<T>::value) {
                 t.resize(length);
                 istream.read(reinterpret_cast<char *>(t.data()), static_cast<std::streamsize>(length * sizeof(T)));
             } else {
                 t.reserve(length);
-                for (size_t i = 0; i < length; ++i) {
+                for (uint32_t i = 0; i < length; ++i) {
                     T item;
                     Codec<T>::template from_binary<isNeedConvert>(istream, item);
                     t.push_back(std::move(item));
@@ -530,35 +788,36 @@ namespace serialization {
 
         constexpr static bool enable = true;
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
             assert(t.has_value());
-            Codec<T>::to_json(allocator, jsonValue, t.value());
+            Codec<T>::template to_json(allocator, jsonValue, t.value());
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             t = std::make_optional<T>();
-            Codec<T>::from_json(jsonValue, t.value());
+            Codec<T>::template from_json(jsonValue, t.value());
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json_member(typename JsonValueType::AllocatorType &allocator,
                                    JsonValueType &jsonValue,
-                                   const std::basic_string<typename JsonValueType::Ch> &key,
+                                   const typename JsonValueType::Ch *key,
                                    const Type &t) {
             assert(jsonValue.IsObject());
             if (likely(t.has_value())) {
-                rapidjson::GenericValue<typename JsonValueType::EncodingType> value;
-                Codec<Type>::to_json(allocator, value, t);
-                jsonValue.AddMember(JsonValueType(key.c_str(), key.length(), allocator), value, allocator);
+                typename JsonValueType::ValueType value;
+                Codec<Type>::template to_json(allocator, value, t);
+                assert(!value.IsNull());
+                jsonValue.AddMember(typename JsonValueType::ValueType(key, allocator), std::move(value), allocator);
             }
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json_member(const JsonValueType &jsonValue,
                                      const std::basic_string<typename JsonValueType::Ch> &key,
                                      Type &t) {
@@ -568,32 +827,71 @@ namespace serialization {
                 t = std::nullopt;
                 return;
             }
-            Codec<Type>::from_json(it->value, t);
+            Codec<Type>::template from_json(it->value, t);
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<bool>::to_binary<isNeedConvert>(ostream, t.has_value());
+            Codec<bool>::template to_binary<isNeedConvert>(ostream, t.has_value());
             if (likely(t.has_value())) {
-                Codec<T>::to_binary<isNeedConvert>(ostream, t.value());
+                Codec<T>::template to_binary<isNeedConvert>(ostream, t.value());
             }
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
             bool has_value;
-            Codec<bool>::from_binary<isNeedConvert>(istream, has_value);
+            Codec<bool>::template from_binary<isNeedConvert>(istream, has_value);
             if (likely(has_value)) {
                 t = std::make_optional<T>();
-                Codec<T>::from_binary<isNeedConvert>(istream, t.value());
+                Codec<T>::template from_binary<isNeedConvert>(istream, t.value());
             } else {
                 t = std::nullopt;
             }
         }
     };
 #endif
+
+    template<class T>
+    struct Codec<std::shared_ptr<T>> : BaseCodec<std::shared_ptr<T>> {
+
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+
+        using Type = std::shared_ptr<T>;
+
+        constexpr static bool enable = true;
+
+        template<class JsonValueType>
+        static void to_json(typename JsonValueType::AllocatorType &allocator,
+                            JsonValueType &jsonValue,
+                            const Type &t) {
+            assert(t != nullptr);
+            Codec<T>::template to_json(allocator, jsonValue, *t);
+        }
+
+        template<class JsonValueType>
+        static void from_json(const JsonValueType &jsonValue,
+                              Type &t) {
+            t = std::make_shared<T>();
+            Codec<T>::template from_json(jsonValue, *t);
+        }
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            assert(t != nullptr);
+            Codec<T>::template to_binary<isNeedConvert>(ostream, *t);
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            t = std::make_shared<T>();
+            Codec<T>::template from_binary<isNeedConvert>(istream, *t);
+        }
+    };
 
     template<class Ch, class T>
     struct Codec<std::unordered_map<std::basic_string<Ch>, T>> : BaseCodec<std::unordered_map<std::basic_string<Ch>, T>> {
@@ -604,55 +902,56 @@ namespace serialization {
 
         constexpr static bool enable = true;
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
             jsonValue.SetObject();
+            jsonValue.MemberReserve(t.size());
             for (const auto &item: t) {
-                JsonValueType key;
-                Codec<std::basic_string<Ch>>::to_json(allocator, key, item.first);
-                JsonValueType value;
-                Codec<T>::to_json(allocator, value, item.second);
-                jsonValue.AddMember(key, value, allocator);
+                typename JsonValueType::ValueType key;
+                Codec<std::basic_string<Ch>>::template to_json(allocator, key, item.first);
+                typename JsonValueType::ValueType value;
+                Codec<T>::template to_json(allocator, value, item.second);
+                jsonValue.AddMember(std::move(key), std::move(value), allocator);
             }
         }
 
-        template<class JsonValueType = rapidjson::Value>
+        template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             if (unlikely(!jsonValue.IsObject())) {
-                throw JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
+                throw exceptions::JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
             }
             t.reserve(jsonValue.MemberCount());
             auto begin = jsonValue.MemberBegin();
             auto end = jsonValue.MemberEnd();
             for (typename JsonValueType::MemberIterator it = begin; it < end; ++it) {
                 std::basic_string<Ch> key;
-                Codec<std::basic_string<Ch>>::from_json(it->name, key);
+                Codec<std::basic_string<Ch>>::template from_json(it->name, key);
                 T value;
-                Codec<T>::from_json(it->value, value);
+                Codec<T>::template from_json(it->value, value);
                 t.emplace(std::move(key), std::move(value));
             }
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::to_binary<isNeedConvert>(ostream, t.length());
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
             for (const auto &item: t) {
                 Codec<std::basic_string<Ch>>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.second);
             }
         }
 
-        template<bool isNeedConvert = false>
+        template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
-            size_t length;
-            Codec<uint32_t>::from_binary<isNeedConvert>(istream, length);
+            uint32_t length;
+            Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
             t.reserve(length);
-            for (size_t i = 0; i < length; ++i) {
+            for (uint32_t i = 0; i < length; ++i) {
                 std::basic_string<Ch> key;
                 Codec<std::basic_string<Ch>>::template from_binary<isNeedConvert>(istream, key);
                 T value;
@@ -661,6 +960,148 @@ namespace serialization {
             }
         }
     };
+
+    template<class T, class S>
+    struct Codec<std::unordered_map<T, S>> : BaseCodec<std::unordered_map<T, S>> {
+
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+        static_assert(Codec<S>::enable, "fail to find impl of Codec");
+
+        using Type = std::unordered_map<T, S>;
+
+        constexpr static bool enable = true;
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
+            for (const auto &item: t) {
+                Codec<T>::template to_binary<isNeedConvert>(ostream, item.first);
+                Codec<S>::template to_binary<isNeedConvert>(ostream, item.second);
+            }
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            uint32_t length;
+            Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
+            t.reserve(length);
+            for (uint32_t i = 0; i < length; ++i) {
+                T key;
+                Codec<T>::template from_binary<isNeedConvert>(istream, key);
+                S value;
+                Codec<S>::template from_binary<isNeedConvert>(istream, value);
+                t.emplace(std::move(key), std::move(value));
+            }
+        }
+    };
+
+    template<class T, class S>
+    struct Codec<std::pair<T, S>> : BaseCodec<std::pair<T, S>> {
+
+        static_assert(Codec<T>::enable, "fail to find impl of Codec");
+        static_assert(Codec<S>::enable, "fail to find impl of Codec");
+
+        using Type = std::pair<T, S>;
+
+        constexpr static bool enable = true;
+
+        template<bool isNeedConvert>
+        static void to_binary(std::ostream &ostream,
+                              const Type &t) {
+            Codec<T>::template to_binary<isNeedConvert>(ostream, t.first);
+            Codec<S>::template to_binary<isNeedConvert>(ostream, t.second);
+        }
+
+        template<bool isNeedConvert>
+        static void from_binary(std::istream &istream,
+                                Type &t) {
+            Codec<T>::template from_binary<isNeedConvert>(istream, t.first);
+            Codec<S>::template from_binary<isNeedConvert>(istream, t.second);
+        }
+    };
+
+    template<bool isTargetSmallEndian>
+    bool getIsNeedConvert() {
+        union {
+            int16_t int16 = 0x0102;
+            int8_t int8;
+        } data;
+        const bool isUsingSmallEndian = data.int8 == 0x02;
+        return isUsingSmallEndian != isTargetSmallEndian;
+    }
+
+    template<bool isTargetSmallEndian, class T>
+    void from_binary(std::istream &istream, T &t) {
+        if (getIsNeedConvert<isTargetSmallEndian>()) {
+            Codec<T>::template from_binary<true>(istream, t);
+        } else {
+            Codec<T>::template from_binary<false>(istream, t);
+        }
+    }
+
+    template<bool isTargetSmallEndian, class T>
+    void to_binary(std::ostream &ostream, const T &t) {
+        if (getIsNeedConvert<isTargetSmallEndian>()) {
+            Codec<T>::template to_binary<true>(ostream, t);
+        } else {
+            Codec<T>::template to_binary<false>(ostream, t);
+        }
+    }
+
+    template<class EncodingType = rapidjson::UTF8<>>
+    rapidjson::GenericDocument<EncodingType> get_json_from_file(const char *path) {
+        FILE *fp;
+#ifdef _WIN32
+        auto mode = "rb";
+#else
+        auto mode = "r";
+#endif
+        const errno_t err = fopen_s(&fp, path, mode);
+        if (unlikely(err != 0)) {
+            fclose(fp);
+            throw exceptions::OpenFileException(path, mode, err);
+        }
+        char readBuffer[65536];
+        rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+        rapidjson::GenericDocument<EncodingType> document;
+        document.ParseStream(is);
+        fclose(fp);
+        return std::move(document);
+    }
+
+    template<class EncodingType = rapidjson::UTF8<>>
+    void write_json_to_file(const char *path, const rapidjson::GenericValue<EncodingType> &j) {
+        FILE *fp;
+#ifdef _WIN32
+        auto mode = "wb";
+#else
+        auto mode = "w";
+#endif
+        errno_t err = fopen_s(&fp, path, mode);
+        if (unlikely(err != 0)) {
+            fclose(fp);
+            throw exceptions::OpenFileException(path, mode, err);
+        }
+        char writeBuffer[65536];
+        rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+        rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
+        j.Accept(writer);
+        fclose(fp);
+    }
+
+#ifdef HAS_CXX17
+    template<class EncodingType = rapidjson::UTF8<>>
+    rapidjson::GenericDocument<EncodingType> get_json_from_file(const std::filesystem::path &path) {
+        return get_json_from_file(path.string().c_str());
+    }
+
+    template<class EncodingType = rapidjson::UTF8<>>
+    void write_json_to_file(const std::filesystem::path &path, const rapidjson::GenericValue<EncodingType> &j) {
+        write_json_to_file(path.string().c_str(), j);
+    }
+#endif
 
 }// namespace serialization
 
@@ -817,103 +1258,157 @@ namespace serialization {
 #define CODEC_STATIC_ASSERT(v1) \
     static_assert(Codec<decltype(std::declval<Type>().v1)>::enable, "fail to find impl of Codec");
 #define CODEC_TO_JSON_MEMBER(v1) \
-    Codec<decltype(t.v1)>::template to_json_member<JsonValueType>(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
+    Codec<decltype(t.v1)>::template to_json_member(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
 #define CODEC_FROM_JSON_MEMBER(v1) \
-    Codec<decltype(t.v1)>::template from_json_member<JsonValueType>(jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
+    Codec<decltype(t.v1)>::template from_json_member(jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
 #define CODEC_TO_BINARY(v1) \
     Codec<decltype(t.v1)>::template to_binary<isNeedConvert>(ostream, t.v1);
 #define CODEC_FROM_BINARY(v1) \
     Codec<decltype(t.v1)>::template from_binary<isNeedConvert>(istream, t.v1);
 
-#ifdef SERIALIZATION_ONLY_READ_FROM_BINARY
-#define CODEC(CodecType, ...)                                                      \
-    template<>                                                                     \
-    struct serialization::Codec<CodecType> : serialization::BaseCodec<CodecType> { \
+#define CODEC_UNIQUE_PTR(CodecType)                                                \
+    namespace serialization {                                                      \
+        template<>                                                                 \
+        struct Codec<std::unique_ptr<CodecType>> : BaseUniquePtrCodec<CodecType> { \
                                                                                    \
-        using Type = CodecType;                                                    \
+            using Type = std::unique_ptr<CodecType>;                               \
                                                                                    \
-        CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                              \
-                                                                                   \
-        constexpr static bool enable = true;                                       \
-                                                                                   \
-        template<bool isNeedConvert>                                               \
-        static void from_binary(std::istream &istream,                             \
-                                Type &t) {                                         \
-            CODEC_PASTE(CODEC_FROM_BINARY, __VA_ARGS__)                            \
-        }                                                                          \
-    };
-#else
-#define CODEC(CodecType, ...)                                                                                              \
-    namespace serialization {                                                                                              \
-                                                                                                                           \
-        namespace details {                                                                                                \
-                                                                                                                           \
-            template<>                                                                                                     \
-            struct JsonKey<CodecType, char> {                                                                              \
-                constexpr static bool enable = true;                                                                       \
-                CODEC_PASTE(CODEC_JSON_KEY_CHAR, __VA_ARGS__)                                                              \
-            };                                                                                                             \
-                                                                                                                           \
-            template<>                                                                                                     \
-            struct JsonKey<CodecType, char16_t> {                                                                          \
-                constexpr static bool enable = true;                                                                       \
-                CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__)                                                            \
-            };                                                                                                             \
-                                                                                                                           \
-            template<>                                                                                                     \
-            struct JsonKey<CodecType, char32_t> {                                                                          \
-                constexpr static bool enable = true;                                                                       \
-                CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__)                                                            \
-            };                                                                                                             \
-                                                                                                                           \
-            template<>                                                                                                     \
-            struct JsonKey<CodecType, wchar_t> {                                                                           \
-                constexpr static bool enable = true;                                                                       \
-                CODEC_PASTE(CODEC_JSON_KEY_WCHAR, __VA_ARGS__)                                                             \
-            };                                                                                                             \
-        }                                                                                                                  \
-                                                                                                                           \
-        template<>                                                                                                         \
-        struct Codec<CodecType> : BaseCodec<CodecType> {                                                                   \
-                                                                                                                           \
-            using Type = CodecType;                                                                                        \
-                                                                                                                           \
-            CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                                  \
-                                                                                                                           \
-            constexpr static bool enable = true;                                                                           \
-                                                                                                                           \
-            template<typename JsonValueType>                                                                               \
-            static void to_json(typename JsonValueType::AllocatorType &allocator,                                          \
-                                JsonValueType &jsonValue,                                                                  \
-                                const Type &t) {                                                                           \
-                static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
-                jsonValue.SetObject();                                                                                     \
-                CODEC_PASTE(CODEC_TO_JSON_MEMBER, __VA_ARGS__)                                                             \
-            }                                                                                                              \
-                                                                                                                           \
-            template<typename JsonValueType>                                                                               \
-            static void from_json(const JsonValueType &jsonValue,                                                          \
-                                  Type &t) {                                                                               \
-                static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
-                if (unlikely(!jsonValue.IsObject())) {                                                                     \
-                    throw JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));                   \
-                }                                                                                                          \
-                CODEC_PASTE(CODEC_FROM_JSON_MEMBER, __VA_ARGS__)                                                           \
-            }                                                                                                              \
-                                                                                                                           \
-            template<bool isNeedConvert>                                                                                   \
-            static void to_binary(std::ostream &ostream,                                                                   \
-                                  const Type &t) {                                                                         \
-                CODEC_PASTE(CODEC_TO_BINARY, __VA_ARGS__)                                                                  \
-            }                                                                                                              \
-                                                                                                                           \
-            template<bool isNeedConvert>                                                                                   \
-            static void from_binary(std::istream &istream,                                                                 \
-                                    Type &t) {                                                                             \
-                CODEC_PASTE(CODEC_FROM_BINARY, __VA_ARGS__)                                                                \
-            }                                                                                                              \
-        };                                                                                                                 \
+            constexpr static bool enable = true;                                   \
+        };                                                                         \
     }
-#endif
+
+#define CODEC_ENUM(CodecType, ParentType)                                \
+    namespace serialization {                                            \
+        template<>                                                       \
+        struct Codec<CodecType> : BaseEnumCodec<CodecType, ParentType> { \
+                                                                         \
+            using Type = CodecType;                                      \
+                                                                         \
+            constexpr static bool enable = true;                         \
+        };                                                               \
+    }
+
+#define CODEC_REGISTER_JSON_KEY(CodecType, ...)                 \
+    namespace serialization {                                   \
+        namespace details {                                     \
+                                                                \
+            template<>                                          \
+            struct JsonKey<CodecType, char> {                   \
+                constexpr static bool enable = true;            \
+                CODEC_PASTE(CODEC_JSON_KEY_CHAR, __VA_ARGS__)   \
+            };                                                  \
+                                                                \
+            template<>                                          \
+            struct JsonKey<CodecType, char16_t> {               \
+                constexpr static bool enable = true;            \
+                CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__) \
+            };                                                  \
+                                                                \
+            template<>                                          \
+            struct JsonKey<CodecType, char32_t> {               \
+                constexpr static bool enable = true;            \
+                CODEC_PASTE(CODEC_JSON_KEY_CHAR16, __VA_ARGS__) \
+            };                                                  \
+                                                                \
+            template<>                                          \
+            struct JsonKey<CodecType, wchar_t> {                \
+                constexpr static bool enable = true;            \
+                CODEC_PASTE(CODEC_JSON_KEY_WCHAR, __VA_ARGS__)  \
+            };                                                  \
+        }                                                       \
+    }
+
+#define CODEC_NONE_WITH_PARENT(CodecType, ParentType)                                        \
+    template<>                                                                               \
+    struct serialization::Codec<CodecType> : serialization::BaseCodec<CodecType> {           \
+                                                                                             \
+        using Type = CodecType;                                                              \
+                                                                                             \
+        static_assert(std::is_same<ParentType, void>::value || Codec<ParentType>::enable);   \
+                                                                                             \
+        constexpr static bool enable = true;                                                 \
+                                                                                             \
+        template<typename JsonValueType>                                                     \
+        static void to_json(typename JsonValueType::AllocatorType &allocator,                \
+                            JsonValueType &jsonValue,                                        \
+                            const Type &t) {                                                 \
+            WrappedCodec<Type, ParentType>::template to_json(allocator, jsonValue, t);       \
+        }                                                                                    \
+                                                                                             \
+        template<typename JsonValueType>                                                     \
+        static void from_json(const JsonValueType &jsonValue,                                \
+                              Type &t) {                                                     \
+            WrappedCodec<Type, ParentType>::template from_json(jsonValue, t);                \
+        }                                                                                    \
+                                                                                             \
+        template<bool isNeedConvert>                                                         \
+        static void to_binary(std::ostream &ostream,                                         \
+                              const Type &t) {                                               \
+            WrappedCodec<Type, ParentType>::template to_binary<isNeedConvert>(ostream, t);   \
+        }                                                                                    \
+                                                                                             \
+        template<bool isNeedConvert>                                                         \
+        static void from_binary(std::istream &istream,                                       \
+                                Type &t) {                                                   \
+            WrappedCodec<Type, ParentType>::template from_binary<isNeedConvert>(istream, t); \
+        }                                                                                    \
+    };
+
+#define CODEC_WITH_PARENT(CodecType, ParentType, ...)                                                                  \
+    CODEC_REGISTER_JSON_KEY(CodecType, __VA_ARGS__)                                                                    \
+                                                                                                                       \
+    template<>                                                                                                         \
+    struct serialization::Codec<CodecType> : serialization::BaseCodec<CodecType> {                                     \
+                                                                                                                       \
+        using Type = CodecType;                                                                                        \
+                                                                                                                       \
+        static_assert(std::is_same<ParentType, void>::value || Codec<ParentType>::enable);                             \
+        CODEC_PASTE(CODEC_STATIC_ASSERT, __VA_ARGS__)                                                                  \
+                                                                                                                       \
+        constexpr static bool enable = true;                                                                           \
+                                                                                                                       \
+        template<typename JsonValueType>                                                                               \
+        static void to_json(typename JsonValueType::AllocatorType &allocator,                                          \
+                            JsonValueType &jsonValue,                                                                  \
+                            const Type &t) {                                                                           \
+            WrappedCodec<Type, ParentType>::template to_json(allocator, jsonValue, t);                                 \
+            static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
+            CODEC_PASTE(CODEC_TO_JSON_MEMBER, __VA_ARGS__)                                                             \
+        }                                                                                                              \
+                                                                                                                       \
+        template<typename JsonValueType>                                                                               \
+        static void from_json(const JsonValueType &jsonValue,                                                          \
+                              Type &t) {                                                                               \
+            WrappedCodec<Type, ParentType>::template from_json(jsonValue, t);                                          \
+            static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
+            CODEC_PASTE(CODEC_FROM_JSON_MEMBER, __VA_ARGS__)                                                           \
+        }                                                                                                              \
+                                                                                                                       \
+        template<bool isNeedConvert>                                                                                   \
+        static void to_binary(std::ostream &ostream,                                                                   \
+                              const Type &t) {                                                                         \
+            WrappedCodec<Type, ParentType>::template to_binary<isNeedConvert>(ostream, t);                             \
+            CODEC_PASTE(CODEC_TO_BINARY, __VA_ARGS__)                                                                  \
+        }                                                                                                              \
+                                                                                                                       \
+        template<bool isNeedConvert>                                                                                   \
+        static void from_binary(std::istream &istream,                                                                 \
+                                Type &t) {                                                                             \
+            WrappedCodec<Type, ParentType>::template from_binary<isNeedConvert>(istream, t);                           \
+            CODEC_PASTE(CODEC_FROM_BINARY, __VA_ARGS__)                                                                \
+        }                                                                                                              \
+    };
+
+#define CODEC_NONE(CodecType) CODEC_NONE_WITH_PARENT(CodecType, void)
+
+#define CODEC(CodecType, ...) CODEC_WITH_PARENT(CodecType, void, __VA_ARGS__)
+
+#define CODEC_NONE_WITH_UNIQUE_PTR_H(CodecType) \
+    CODEC_NONE(CodecType)                       \
+    CODEC_UNIQUE_PTR(CodecType)
+
+#define CODEC_WITH_UNIQUE_PTR_H(CodecType) \
+    CODEC(CodecType)                       \
+    CODEC_UNIQUE_PTR(CodecType)
 
 #endif//SERIALIZATION_H

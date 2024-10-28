@@ -4,7 +4,7 @@ project(serialization
         DESCRIPTION "serialization library for C++"
         LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 
 add_library(serialization INTERFACE include/serialization/Serialization.h)
