@@ -9,3 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED true)
 
 add_library(serialization INTERFACE include/serialization/Serialization.h)
 target_include_directories(serialization INTERFACE rapidjson/include include)
+
+if (PROJECT_IS_TOP_LEVEL)
+    add_executable(serialization_example example/example.cpp)
+    target_link_libraries(serialization_example PUBLIC serialization)
+endif ()
