@@ -7,15 +7,6 @@ serialization library for C++. It support json format and binary format.
 ## Get start
 
 ```cpp
-//
-// Created by Yancey on 2024-11-13.
-//
-
-#pragma once
-
-#ifndef EXAMPLE_H
-#define EXAMPLE_H
-
 #include <serialization/serialization.h>
 #include <string>
 #include <vector>
@@ -83,7 +74,4 @@ exmaple::Teacher teacher_from_binary(std::istream &istream) {
 void teacher_to_binary(std::ostream &ostream, const exmaple::Teacher &teacher) {
     serialization::template to_binary<true>(ostream, teacher);
 }
-
-#endif//EXAMPLE_H
-
 ```
