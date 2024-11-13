@@ -1409,11 +1409,11 @@ namespace serialization {
 #define CODEC(CodecType, ...) CODEC_WITH_PARENT(CodecType, void, __VA_ARGS__)
 
 #define CODEC_NONE_WITH_UNIQUE_PTR(CodecType) \
-    CODEC_NONE(CodecType)                       \
+    CODEC_NONE(CodecType)                     \
     CODEC_UNIQUE_PTR(CodecType)
 
 #define CODEC_WITH_UNIQUE_PTR(CodecType) \
-    CODEC(CodecType)                       \
+    CODEC(CodecType)                     \
     CODEC_UNIQUE_PTR(CodecType)
 
 #endif//SERIALIZATION_H
