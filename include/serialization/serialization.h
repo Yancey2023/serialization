@@ -735,6 +735,7 @@ namespace serialization {
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
+            assert(t.empty());
             if (unlikely(!jsonValue.IsArray())) {
                 throw exceptions::JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
             }
@@ -762,6 +763,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
+            assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
             if CONSTEXPR17 ((!isNeedConvert || sizeof(T) <= 1) && details::is_number<T>::value) {
@@ -920,6 +922,7 @@ namespace serialization {
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
+            assert(t.empty());
             if (unlikely(!jsonValue.IsObject())) {
                 throw exceptions::JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
             }
@@ -948,6 +951,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
+            assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
             t.reserve(length);
@@ -984,6 +988,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
+            assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
             t.reserve(length);
