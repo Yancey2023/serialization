@@ -446,7 +446,7 @@ namespace serialization {
                                    const Type &t) {
             assert(jsonValue.IsObject());
             typename JsonValueType::ValueType value;
-            Codec<Type>::template to_json(allocator, value, t);
+            Codec<Type>::template to_json<typename JsonValueType::ValueType>(allocator, value, t);
             assert(!value.IsNull());
             jsonValue.AddMember(typename JsonValueType::ValueType(key, allocator), std::move(value), allocator);
         }
@@ -457,7 +457,7 @@ namespace serialization {
                                      Type &t) {
             static_assert(Codec<Type>::enable, "fail to find impl of Codec");
             assert(jsonValue.IsObject());
-            Codec<Type>::template from_json(find_member_or_throw(jsonValue, key), t);
+            Codec<Type>::template from_json<typename JsonValueType::ValueType>(find_member_or_throw(jsonValue, key), t);
         }
     };
 
@@ -474,13 +474,13 @@ namespace serialization {
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
-            Codec<ParentType>::template to_json(allocator, jsonValue, static_cast<const ParentType &>(t));
+            Codec<ParentType>::template to_json<JsonValueType>(allocator, jsonValue, static_cast<const ParentType &>(t));
         }
 
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            Codec<ParentType>::template from_json(jsonValue, static_cast<ParentType &>(t));
+            Codec<ParentType>::template from_json<JsonValueType>(jsonValue, static_cast<ParentType &>(t));
         }
 
         template<bool isNeedConvert>
@@ -576,13 +576,13 @@ namespace serialization {
         static void to_json(typename JsonValueType::AllocatorType &allocator,
                             JsonValueType &jsonValue,
                             const Type &t) {
-            Codec<S>::template to_json(allocator, jsonValue, reinterpret_cast<const S &>(t));
+            Codec<S>::template to_json<JsonValueType>(allocator, jsonValue, reinterpret_cast<const S &>(t));
         }
 
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            Codec<S>::template from_json(jsonValue, reinterpret_cast<S &>(t));
+            Codec<S>::template from_json<JsonValueType>(jsonValue, reinterpret_cast<S &>(t));
         }
 
         template<bool isNeedConvert>
@@ -739,7 +739,7 @@ namespace serialization {
             jsonValue.GetArray().Reserve(t.size(), allocator);
             for (const T &item: t) {
                 JsonValueType itemJsonValue;
-                Codec<T>::template to_json(allocator, itemJsonValue, item);
+                Codec<T>::template to_json<typename JsonValueType::ValueType>(allocator, itemJsonValue, item);
                 jsonValue.PushBack(std::move(itemJsonValue), allocator);
             }
         }
@@ -754,7 +754,7 @@ namespace serialization {
             t.reserve(jsonValue.Size());
             for (const auto &item: jsonValue.GetArray()) {
                 T item1;
-                Codec<T>::template from_json(item, item1);
+                Codec<T>::template from_json<typename JsonValueType::ValueType>(item, item1);
                 t.push_back(std::move(item1));
             }
         }
@@ -807,14 +807,14 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             assert(t.has_value());
-            Codec<T>::template to_json(allocator, jsonValue, t.value());
+            Codec<T>::template to_json<JsonValueType>(allocator, jsonValue, t.value());
         }
 
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             t = std::make_optional<T>();
-            Codec<T>::template from_json(jsonValue, t.value());
+            Codec<T>::template from_json<JsonValueType>(jsonValue, t.value());
         }
 
         template<class JsonValueType>
@@ -825,7 +825,7 @@ namespace serialization {
             assert(jsonValue.IsObject());
             if (likely(t.has_value())) {
                 typename JsonValueType::ValueType value;
-                Codec<Type>::template to_json(allocator, value, t);
+                Codec<Type>::template to_json<JsonValueType>(allocator, value, t);
                 assert(!value.IsNull());
                 jsonValue.AddMember(typename JsonValueType::ValueType(key, allocator), std::move(value), allocator);
             }
@@ -841,7 +841,7 @@ namespace serialization {
                 t = std::nullopt;
                 return;
             }
-            Codec<Type>::template from_json(it->value, t);
+            Codec<Type>::template from_json<JsonValueType>(it->value, t);
         }
 
         template<bool isNeedConvert>
@@ -882,14 +882,14 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             assert(t != nullptr);
-            Codec<T>::template to_json(allocator, jsonValue, *t);
+            Codec<T>::template to_json<JsonValueType>(allocator, jsonValue, *t);
         }
 
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             t = std::make_shared<T>();
-            Codec<T>::template from_json(jsonValue, *t);
+            Codec<T>::template from_json<JsonValueType>(jsonValue, *t);
         }
 
         template<bool isNeedConvert>
@@ -924,9 +924,9 @@ namespace serialization {
             jsonValue.MemberReserve(t.size());
             for (const auto &item: t) {
                 typename JsonValueType::ValueType key;
-                Codec<std::basic_string<Ch>>::template to_json(allocator, key, item.first);
+                Codec<std::basic_string<Ch>>::template to_json<typename JsonValueType::ValueType>(allocator, key, item.first);
                 typename JsonValueType::ValueType value;
-                Codec<T>::template to_json(allocator, value, item.second);
+                Codec<T>::template to_json<JsonValueType>::ValueType(allocator, value, item.second);
                 jsonValue.AddMember(std::move(key), std::move(value), allocator);
             }
         }
@@ -943,9 +943,9 @@ namespace serialization {
             auto end = jsonValue.MemberEnd();
             for (typename JsonValueType::MemberIterator it = begin; it < end; ++it) {
                 std::basic_string<Ch> key;
-                Codec<std::basic_string<Ch>>::template from_json(it->name, key);
+                Codec<std::basic_string<Ch>>::template from_json<typename JsonValueType::ValueType>(it->name, key);
                 T value;
-                Codec<T>::template from_json(it->value, value);
+                Codec<T>::template from_json<typename JsonValueType::ValueType>(it->value, value);
                 t.emplace(std::move(key), std::move(value));
             }
         }
@@ -1283,9 +1283,9 @@ namespace serialization {
 #define CODEC_STATIC_ASSERT(v1) \
     static_assert(Codec<decltype(std::declval<Type>().v1)>::enable, "fail to find impl of Codec");
 #define CODEC_TO_JSON_MEMBER(v1) \
-    Codec<decltype(t.v1)>::template to_json_member(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
+    Codec<decltype(t.v1)>::template to_json_member<JsonValueType>(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
 #define CODEC_FROM_JSON_MEMBER(v1) \
-    Codec<decltype(t.v1)>::template from_json_member(jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
+    Codec<decltype(t.v1)>::template from_json_member<JsonValueType>(jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
 #define CODEC_TO_BINARY(v1) \
     Codec<decltype(t.v1)>::template to_binary<isNeedConvert>(ostream, t.v1);
 #define CODEC_FROM_BINARY(v1) \
@@ -1343,40 +1343,40 @@ namespace serialization {
         }                                                       \
     }
 
-#define CODEC_NONE_WITH_PARENT(CodecType, ParentType)                                        \
-    template<>                                                                               \
-    struct serialization::Codec<CodecType> : serialization::BaseCodec<CodecType> {           \
-                                                                                             \
-        using Type = CodecType;                                                              \
-                                                                                             \
-        static_assert(std::is_same<ParentType, void>::value || Codec<ParentType>::enable);   \
-                                                                                             \
-        constexpr static bool enable = true;                                                 \
-                                                                                             \
-        template<typename JsonValueType>                                                     \
-        static void to_json(typename JsonValueType::AllocatorType &allocator,                \
-                            JsonValueType &jsonValue,                                        \
-                            const Type &t) {                                                 \
-            WrappedCodec<Type, ParentType>::template to_json(allocator, jsonValue, t);       \
-        }                                                                                    \
-                                                                                             \
-        template<typename JsonValueType>                                                     \
-        static void from_json(const JsonValueType &jsonValue,                                \
-                              Type &t) {                                                     \
-            WrappedCodec<Type, ParentType>::template from_json(jsonValue, t);                \
-        }                                                                                    \
-                                                                                             \
-        template<bool isNeedConvert>                                                         \
-        static void to_binary(std::ostream &ostream,                                         \
-                              const Type &t) {                                               \
-            WrappedCodec<Type, ParentType>::template to_binary<isNeedConvert>(ostream, t);   \
-        }                                                                                    \
-                                                                                             \
-        template<bool isNeedConvert>                                                         \
-        static void from_binary(std::istream &istream,                                       \
-                                Type &t) {                                                   \
-            WrappedCodec<Type, ParentType>::template from_binary<isNeedConvert>(istream, t); \
-        }                                                                                    \
+#define CODEC_NONE_WITH_PARENT(CodecType, ParentType)                                                 \
+    template<>                                                                                        \
+    struct serialization::Codec<CodecType> : serialization::BaseCodec<CodecType> {                    \
+                                                                                                      \
+        using Type = CodecType;                                                                       \
+                                                                                                      \
+        static_assert(std::is_same<ParentType, void>::value || Codec<ParentType>::enable);            \
+                                                                                                      \
+        constexpr static bool enable = true;                                                          \
+                                                                                                      \
+        template<typename JsonValueType>                                                              \
+        static void to_json(typename JsonValueType::AllocatorType &allocator,                         \
+                            JsonValueType &jsonValue,                                                 \
+                            const Type &t) {                                                          \
+            WrappedCodec<Type, ParentType>::template to_json<JsonValueType>(allocator, jsonValue, t); \
+        }                                                                                             \
+                                                                                                      \
+        template<typename JsonValueType>                                                              \
+        static void from_json(const JsonValueType &jsonValue,                                         \
+                              Type &t) {                                                              \
+            WrappedCodec<Type, ParentType>::template from_json<JsonValueType>(jsonValue, t);          \
+        }                                                                                             \
+                                                                                                      \
+        template<bool isNeedConvert>                                                                  \
+        static void to_binary(std::ostream &ostream,                                                  \
+                              const Type &t) {                                                        \
+            WrappedCodec<Type, ParentType>::template to_binary<isNeedConvert>(ostream, t);            \
+        }                                                                                             \
+                                                                                                      \
+        template<bool isNeedConvert>                                                                  \
+        static void from_binary(std::istream &istream,                                                \
+                                Type &t) {                                                            \
+            WrappedCodec<Type, ParentType>::template from_binary<isNeedConvert>(istream, t);          \
+        }                                                                                             \
     };
 
 #define CODEC_WITH_PARENT(CodecType, ParentType, ...)                                                                  \
@@ -1396,7 +1396,7 @@ namespace serialization {
         static void to_json(typename JsonValueType::AllocatorType &allocator,                                          \
                             JsonValueType &jsonValue,                                                                  \
                             const Type &t) {                                                                           \
-            WrappedCodec<Type, ParentType>::template to_json(allocator, jsonValue, t);                                 \
+            WrappedCodec<Type, ParentType>::template to_json<JsonValueType>(allocator, jsonValue, t);                  \
             static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
             CODEC_PASTE(CODEC_TO_JSON_MEMBER, __VA_ARGS__)                                                             \
         }                                                                                                              \
@@ -1404,7 +1404,7 @@ namespace serialization {
         template<typename JsonValueType>                                                                               \
         static void from_json(const JsonValueType &jsonValue,                                                          \
                               Type &t) {                                                                               \
-            WrappedCodec<Type, ParentType>::template from_json(jsonValue, t);                                          \
+            WrappedCodec<Type, ParentType>::template from_json<JsonValueType>(jsonValue, t);                           \
             static_assert(details::JsonKey<Type, typename JsonValueType::Ch>::enable, "fail to find impl of JsonKey"); \
             CODEC_PASTE(CODEC_FROM_JSON_MEMBER, __VA_ARGS__)                                                           \
         }                                                                                                              \
