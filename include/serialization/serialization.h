@@ -825,7 +825,7 @@ namespace serialization {
             assert(jsonValue.IsObject());
             if (likely(t.has_value())) {
                 typename JsonValueType::ValueType value;
-                Codec<Type>::template to_json<JsonValueType>(allocator, value, t);
+                Codec<Type>::template to_json<typename JsonValueType::ValueType>(allocator, value, t);
                 assert(!value.IsNull());
                 jsonValue.AddMember(typename JsonValueType::ValueType(key, allocator), std::move(value), allocator);
             }
@@ -841,7 +841,7 @@ namespace serialization {
                 t = std::nullopt;
                 return;
             }
-            Codec<Type>::template from_json<JsonValueType>(it->value, t);
+            Codec<Type>::template from_json<typename JsonValueType::ValueType>(it->value, t);
         }
 
         template<bool isNeedConvert>
@@ -1121,8 +1121,8 @@ namespace serialization {
         return get_json_from_file(path.string().c_str());
     }
 
-    template<class EncodingType = rapidjson::UTF8<>>
-    void write_json_to_file(const std::filesystem::path &path, const rapidjson::GenericValue<EncodingType> &j) {
+    template<class JsonType>
+    void write_json_to_file(const std::filesystem::path &path, const JsonType &j) {
         write_json_to_file(path.string().c_str(), j);
     }
 #endif
