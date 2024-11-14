@@ -367,6 +367,7 @@ namespace serialization {
 #ifndef SERIALIZATION_NO_FILESYSTEM
         class OpenFileException final : public std::runtime_error {
         public:
+#ifdef _WIN32
             explicit OpenFileException(const char *path, const char *mode, const errno_t err)
                 : std::runtime_error(std::string("fail to open file with mode \"")
                                              .append(mode)
@@ -374,9 +375,16 @@ namespace serialization {
                                              .append(std::to_string(err))
                                              .append(": ")
                                              .append(path)) {}
+#else
+            explicit OpenFileException(const char *path, const char *mode)
+                : std::runtime_error(std::string("fail to open file with mode \"")
+                                             .append(mode)
+                                             .append(": ")
+                                             .append(path)) {}
+
+#endif
         };
 #endif
-
     }// namespace exceptions
 
     template<class JsonValueType>
@@ -1075,7 +1083,7 @@ namespace serialization {
         fp = fopen(path, mode);
         if (unlikely(fp == nullptr)) {
             fclose(fp);
-            throw exceptions::OpenFileException(path, mode, err);
+            throw exceptions::OpenFileException(path, mode);
         }
 #endif
         char readBuffer[65536];
@@ -1101,7 +1109,7 @@ namespace serialization {
         fp = fopen(path, mode);
         if (unlikely(fp == nullptr)) {
             fclose(fp);
-            throw exceptions::OpenFileException(path, mode, err);
+            throw exceptions::OpenFileException(path, mode);
         }
 #endif
         char writeBuffer[65536];
