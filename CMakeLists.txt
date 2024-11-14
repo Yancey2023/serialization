@@ -7,11 +7,11 @@ project(serialization
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 
-add_library(serialization INTERFACE include/serialization/Serialization.h)
+add_library(serialization INTERFACE include/serialization/serialization.h)
 target_include_directories(serialization INTERFACE rapidjson/include include)
 add_library(serialization::serialization ALIAS serialization)
 
-add_library(serialization_no_filesystem INTERFACE include/serialization/Serialization.h)
+add_library(serialization_no_filesystem INTERFACE include/serialization/serialization.h)
 target_include_directories(serialization_no_filesystem INTERFACE rapidjson/include include)
 target_compile_definitions(serialization_no_filesystem INTERFACE SERIALIZATION_NO_FILESYSTEM)
 add_library(serialization::serialization_no_filesystem ALIAS serialization_no_filesystem)
