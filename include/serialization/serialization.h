@@ -1065,14 +1065,19 @@ namespace serialization {
         FILE *fp;
 #ifdef _WIN32
         auto mode = "rb";
-#else
-        auto mode = "r";
-#endif
         const errno_t err = fopen_s(&fp, path, mode);
         if (unlikely(err != 0)) {
             fclose(fp);
             throw exceptions::OpenFileException(path, mode, err);
         }
+#else
+        auto mode = "r";
+        fp = fopen(path, mode);
+        if (unlikely(fp == nullptr)) {
+            fclose(fp);
+            throw exceptions::OpenFileException(path, mode, err);
+        }
+#endif
         char readBuffer[65536];
         rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
         rapidjson::GenericDocument<EncodingType> document;
@@ -1086,14 +1091,19 @@ namespace serialization {
         FILE *fp;
 #ifdef _WIN32
         auto mode = "wb";
-#else
-        auto mode = "w";
-#endif
         errno_t err = fopen_s(&fp, path, mode);
         if (unlikely(err != 0)) {
             fclose(fp);
             throw exceptions::OpenFileException(path, mode, err);
         }
+#else
+        auto mode = "w";
+        fp = fopen(path, mode);
+        if (unlikely(fp == nullptr)) {
+            fclose(fp);
+            throw exceptions::OpenFileException(path, mode, err);
+        }
+#endif
         char writeBuffer[65536];
         rapidjson::FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
         rapidjson::Writer<rapidjson::FileWriteStream> writer(os);
