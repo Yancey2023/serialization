@@ -1075,14 +1075,12 @@ namespace serialization {
         auto mode = "rb";
         const errno_t err = fopen_s(&fp, path, mode);
         if (unlikely(err != 0)) {
-            fclose(fp);
             throw exceptions::OpenFileException(path, mode, err);
         }
 #else
         auto mode = "r";
         fp = fopen(path, mode);
         if (unlikely(fp == nullptr)) {
-            fclose(fp);
             throw exceptions::OpenFileException(path, mode);
         }
 #endif
@@ -1094,21 +1092,19 @@ namespace serialization {
         return std::move(document);
     }
 
-    template<class EncodingType = rapidjson::UTF8<>>
-    void write_json_to_file(const char *path, const rapidjson::GenericValue<EncodingType> &j) {
+    template<class JsonType>
+    void write_json_to_file(const char *path, const JsonType &j) {
         FILE *fp;
 #ifdef _WIN32
         auto mode = "wb";
         errno_t err = fopen_s(&fp, path, mode);
         if (unlikely(err != 0)) {
-            fclose(fp);
             throw exceptions::OpenFileException(path, mode, err);
         }
 #else
         auto mode = "w";
         fp = fopen(path, mode);
         if (unlikely(fp == nullptr)) {
-            fclose(fp);
             throw exceptions::OpenFileException(path, mode);
         }
 #endif
