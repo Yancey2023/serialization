@@ -1275,17 +1275,17 @@ namespace serialization {
 #define CODEC_JSON_KEY_CHAR(v1) \
     static const char *v1() { return #v1; }
 #define CODEC_JSON_KEY_CHAR16(v1) \
-    static const char16_t *v1() { return u## #v1; }
+    static const char16_t *v1##_() { return u## #v1; }
 #define CODEC_JSON_KEY_CHAR32(v1) \
-    static const char32_t *v1() { return U## #v1; }
+    static const char32_t *v1##_() { return U## #v1; }
 #define CODEC_JSON_KEY_WCHAR(v1) \
-    static const wchar_t *v1() { return L## #v1; }
+    static const wchar_t *v1##_() { return L## #v1; }
 #define CODEC_STATIC_ASSERT(v1) \
     static_assert(Codec<decltype(std::declval<Type>().v1)>::enable, "fail to find impl of Codec");
 #define CODEC_TO_JSON_MEMBER(v1) \
-    Codec<decltype(t.v1)>::template to_json_member<JsonValueType>(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
+    Codec<decltype(t.v1)>::template to_json_member<JsonValueType>(allocator, jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1##_(), t.v1);
 #define CODEC_FROM_JSON_MEMBER(v1) \
-    Codec<decltype(t.v1)>::template from_json_member<JsonValueType>(jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1(), t.v1);
+    Codec<decltype(t.v1)>::template from_json_member<JsonValueType>(jsonValue, details::JsonKey<Type, typename JsonValueType::Ch>::v1##_(), t.v1);
 #define CODEC_TO_BINARY(v1) \
     Codec<decltype(t.v1)>::template to_binary<isNeedConvert>(ostream, t.v1);
 #define CODEC_FROM_BINARY(v1) \
