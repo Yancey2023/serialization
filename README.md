@@ -19,7 +19,7 @@ namespace exmaple {
         int age;
     };
 
-    class Teacher : Person {
+    class Teacher : public Person {
     public:
         std::vector<Person> students;
     };
@@ -53,15 +53,15 @@ CODEC_UNIQUE_PTR(exmaple::Teacher)// need: CODEC_WITH_PARENT(exmaple::Teacher, e
 
 CODEC_UNIQUE_PTR(exmaple::Student)// need: CODEC_WITH_PARENT(exmaple::Student, exmaple::Person)
 
-exmaple::Teacher teacher_from_json(const rapidjson::Value<rapidjson::UTF8<>> &jsonValue) {
+exmaple::Teacher teacher_from_json(const rapidjson::GenericValue<rapidjson::UTF8<>> &jsonValue) {
     exmaple::Teacher teacher;
-    serialization::Codec<exmaple::Teacher>::template from_json<true>(jsonValue, teacher);
+    serialization::Codec<exmaple::Teacher>::template from_json<rapidjson::GenericValue<rapidjson::UTF8<>>>(jsonValue, teacher);
     return teacher;
 }
 
-rapidjson::Value<rapidjson::UTF8<>> teacher_to_json(const exmaple::Teacher &teacher) {
-    rapidjson::Value<rapidjson::UTF8<>> jsonValue;
-    serialization::Codec<exmaple::Teacher>::template to_json<true>(jsonValue, teacher);
+rapidjson::GenericDocument<rapidjson::UTF8<>> teacher_to_json(const exmaple::Teacher &teacher) {
+    rapidjson::GenericDocument<rapidjson::UTF8<>> jsonValue;
+    serialization::Codec<exmaple::Teacher>::template to_json<rapidjson::GenericDocument<rapidjson::UTF8<>>>(jsonValue.GetAllocator(), jsonValue, teacher);
     return jsonValue;
 }
 

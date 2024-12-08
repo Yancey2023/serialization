@@ -17,6 +17,6 @@ target_compile_definitions(serialization_no_filesystem INTERFACE SERIALIZATION_N
 add_library(serialization::serialization_no_filesystem ALIAS serialization_no_filesystem)
 
 if (PROJECT_IS_TOP_LEVEL)
-    add_executable(serialization_example example/example.cpp)
+    add_library(serialization_example example/example.cpp)
     target_link_libraries(serialization_example PUBLIC serialization)
 endif ()
