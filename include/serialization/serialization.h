@@ -47,7 +47,7 @@
     #undef unlikely
 #endif
 #if __cplusplus >= 202002L
-    #define likely(expr    (expr) [[likely]]
+    #define likely(expr)   (expr) [[likely]]
     #define unlikely(expr) (expr) [[unlikely]]
 #elif defined(__GNUC__) || defined(__clang__)
     #define likely(expr)   __builtin_expect(!!(expr), 1)
