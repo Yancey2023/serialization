@@ -1,7 +1,14 @@
-# build directory
-/cmake-build-debug
-/cmake-build-release
+# clion
+.idea
+cmake-build-*
 
-# IDE
-/.vscode
-/.idea
+# vscode
+.vscode
+.cache
+build
+
+# MacOS
+.DS_STORE
+
+# QtCreator
+*.user
