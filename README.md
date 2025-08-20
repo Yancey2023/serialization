@@ -2,7 +2,7 @@
 
 ## Description
 
-serialization library for C++. It support json format and binary format.
+serialization library for C++. It supports json format and binary format.
 
 ## Get start
 
@@ -11,7 +11,7 @@ serialization library for C++. It support json format and binary format.
 #include <string>
 #include <vector>
 
-namespace exmaple {
+namespace example {
 
     class Person {
     public:
@@ -35,43 +35,43 @@ namespace exmaple {
         STUDENT
     };
 
-}// namespace exmaple
+}// namespace example
 
-CODEC(exmaple::Person, name, age)
+CODEC(example::Person, name, age)
 
-CODEC_WITH_PARENT(exmaple::Teacher, exmaple::Person, students)// need: CODEC(exmaple::Person, name, age)
+CODEC_WITH_PARENT(example::Teacher, example::Person, students)// need: CODEC(example::Person, name, age)
 
-CODEC_NONE(exmaple::EmptyClass)
+CODEC_NONE(example::EmptyClass)
 
-CODEC_NONE_WITH_PARENT(exmaple::Student, exmaple::Person)// need: CODEC(exmaple::Person, name, age)
+CODEC_NONE_WITH_PARENT(example::Student, example::Person)// need: CODEC(example::Person, name, age)
 
-CODEC_ENUM(exmaple::Job, std::uint8_t)
+CODEC_ENUM(example::Job, std::uint8_t)
 
-CODEC_UNIQUE_PTR(exmaple::Person)// need: CODEC(exmaple::Person, name, age)
+CODEC_UNIQUE_PTR(example::Person)// need: CODEC(example::Person, name, age)
 
-CODEC_UNIQUE_PTR(exmaple::Teacher)// need: CODEC_WITH_PARENT(exmaple::Teacher, exmaple::Person, students)
+CODEC_UNIQUE_PTR(example::Teacher)// need: CODEC_WITH_PARENT(example::Teacher, example::Person, students)
 
-CODEC_UNIQUE_PTR(exmaple::Student)// need: CODEC_WITH_PARENT(exmaple::Student, exmaple::Person)
+CODEC_UNIQUE_PTR(example::Student)// need: CODEC_WITH_PARENT(example::Student, example::Person)
 
-exmaple::Teacher teacher_from_json(const rapidjson::GenericValue<rapidjson::UTF8<>> &jsonValue) {
-    exmaple::Teacher teacher;
-    serialization::Codec<exmaple::Teacher>::template from_json<rapidjson::GenericValue<rapidjson::UTF8<>>>(jsonValue, teacher);
+example::Teacher teacher_from_json(const rapidjson::GenericValue<rapidjson::UTF8<>> &jsonValue) {
+    example::Teacher teacher;
+    serialization::Codec<example::Teacher>::template from_json<rapidjson::GenericValue<rapidjson::UTF8<>>>(jsonValue, teacher);
     return teacher;
 }
 
-rapidjson::GenericDocument<rapidjson::UTF8<>> teacher_to_json(const exmaple::Teacher &teacher) {
+rapidjson::GenericDocument<rapidjson::UTF8<>> teacher_to_json(const example::Teacher &teacher) {
     rapidjson::GenericDocument<rapidjson::UTF8<>> jsonValue;
-    serialization::Codec<exmaple::Teacher>::template to_json<rapidjson::GenericDocument<rapidjson::UTF8<>>>(jsonValue.GetAllocator(), jsonValue, teacher);
+    serialization::Codec<example::Teacher>::template to_json<rapidjson::GenericDocument<rapidjson::UTF8<>>>(jsonValue.GetAllocator(), jsonValue, teacher);
     return jsonValue;
 }
 
-exmaple::Teacher teacher_from_binary(std::istream &istream) {
-    exmaple::Teacher teacher;
+example::Teacher teacher_from_binary(std::istream &istream) {
+    example::Teacher teacher;
     serialization::template from_binary<true>(istream, teacher);
     return teacher;
 }
 
-void teacher_to_binary(std::ostream &ostream, const exmaple::Teacher &teacher) {
+void teacher_to_binary(std::ostream &ostream, const example::Teacher &teacher) {
     serialization::template to_binary<true>(ostream, teacher);
 }
 ```
