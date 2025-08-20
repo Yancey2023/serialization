@@ -245,38 +245,40 @@ namespace serialization {
     std::basic_string<typename TargetEncoding::Ch> xstring2xstring(const std::basic_string<typename SourceEncoding::Ch> &xstring) {
         if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename TargetEncoding::Ch>::value) {
             return xstring;
-        }
-        rapidjson::GenericStringStream<SourceEncoding> source(xstring.data());
-        rapidjson::GenericStringBuffer<TargetEncoding> target;
-        while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
-#ifdef CHelperDebug
-                throw std::runtime_error("fail to transform string");
+        } else {
+            rapidjson::GenericStringStream<SourceEncoding> source(xstring.data());
+            rapidjson::GenericStringBuffer<TargetEncoding> target;
+            while (source.Peek() != '\0') {
+                if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
+#ifdef NDEBUG
+                    return std::basic_string<typename TargetEncoding::Ch>();
 #else
-                return std::basic_string<typename TargetEncoding::Ch>();
+                    throw std::runtime_error("fail to transform string");
 #endif
+                }
             }
+            return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
         }
-        return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
     }
 
     template<class SourceEncoding, class TargetEncoding>
     std::basic_string<typename TargetEncoding::Ch> xstring2xstring(const typename SourceEncoding::Ch *xstring) {
         if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename TargetEncoding::Ch>::value) {
             return std::basic_string<typename SourceEncoding::Ch>(xstring);
-        }
-        rapidjson::GenericStringStream<SourceEncoding> source(xstring);
-        rapidjson::GenericStringBuffer<TargetEncoding> target;
-        while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
-#ifdef CHelperDebug
-                throw std::runtime_error("fail to transform string");
+        } else {
+            rapidjson::GenericStringStream<SourceEncoding> source(xstring);
+            rapidjson::GenericStringBuffer<TargetEncoding> target;
+            while (source.Peek() != '\0') {
+                if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
+#ifdef NDEBUG
+                    return std::basic_string<typename TargetEncoding::Ch>();
 #else
-                return std::basic_string<typename TargetEncoding::Ch>();
+                    throw std::runtime_error("fail to transform string");
 #endif
+                }
             }
+            return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
         }
-        return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
     }
 
     template<class SourceEncoding, class TargetEncoding>
@@ -286,37 +288,41 @@ namespace serialization {
                     // ReSharper disable once CppCStyleCast
                     (typename TargetEncoding::Ch *) jsonString.GetString(),
                     jsonString.GetStringLength());
-        }
-        rapidjson::GenericStringStream<SourceEncoding> source(jsonString.GetString());
-        rapidjson::GenericStringBuffer<TargetEncoding> target;
-        while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
-#ifdef CHelperDebug
-                throw std::runtime_error("fail to transform string");
+        } else {
+            rapidjson::GenericStringStream<SourceEncoding> source(jsonString.GetString());
+            rapidjson::GenericStringBuffer<TargetEncoding> target;
+            while (source.Peek() != '\0') {
+                if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
+#ifdef NDEBUG
+                    throw std::runtime_error("fail to transform string");
 #else
-                return std::basic_string<typename TargetEncoding::Ch>();
+                    return std::basic_string<typename TargetEncoding::Ch>();
 #endif
+                }
             }
+            return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
         }
-        return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
     }
 
     template<class SourceEncoding, class JsonValueType>
     rapidjson::GenericValue<typename JsonValueType::EncodingType> xstring2jsonString(typename JsonValueType::AllocatorType &allocator,
                                                                                      const std::basic_string<typename SourceEncoding::Ch> &xstring) {
         if CONSTEXPR17 (details::is_same<typename SourceEncoding::Ch, typename JsonValueType::Ch>::value) {
-            return rapidjson::GenericValue<typename JsonValueType::EncodingType>(xstring.data(), xstring.length(), allocator);
-        }
-        rapidjson::GenericStringStream<SourceEncoding> source(xstring.c_str());
-        rapidjson::GenericStringBuffer<typename JsonValueType::EncodingType> target;
-        while (source.Peek() != '\0') {
-            if (!rapidjson::Transcoder<SourceEncoding, typename JsonValueType::EncodingType>::Transcode(source, target)) {
-                assert(false);
-                // ReSharper disable once CppDFAUnreachableCode
-                return rapidjson::GenericValue<typename JsonValueType::EncodingType>();
+            return rapidjson::GenericValue<typename JsonValueType::EncodingType>(xstring.data(), static_cast<rapidjson::SizeType>(xstring.length()), allocator);
+        } else {
+            rapidjson::GenericStringStream<SourceEncoding> source(xstring.c_str());
+            rapidjson::GenericStringBuffer<typename JsonValueType::EncodingType> target;
+            while (source.Peek() != '\0') {
+                if (!rapidjson::Transcoder<SourceEncoding, typename JsonValueType::EncodingType>::Transcode(source, target)) {
+#ifdef NDEBUG
+                    return rapidjson::GenericValue<typename JsonValueType::EncodingType>();
+#else
+                    throw std::runtime_error("fail to transform string");
+#endif
+                }
             }
+            return typename JsonValueType::ValueType(target.GetString(), static_cast<rapidjson::SizeType>(target.GetLength()), allocator);
         }
-        return typename JsonValueType::ValueType(target.GetString(), target.GetLength(), allocator);
     }
 
     inline const char *getJsonTypeStr(const rapidjson::Type type) {
@@ -616,7 +622,6 @@ namespace serialization {
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            RapidJsonTypeHelperType a = 1;
             if unlikely (!(static_cast<bool>(details::is_same<Type, float>::value)
                                    ? jsonValue.IsLosslessFloat()
                            : static_cast<bool>(details::is_same<Type, double>::value)
@@ -641,7 +646,7 @@ namespace serialization {
                     // ReSharper disable once CppTooWideScope
                 } source = {t};
                 uint8_t target[sizeof(t)];
-                for (int i = 0; i < sizeof(t); ++i) {
+                for (uint8_t i = 0; i < static_cast<uint8_t>(sizeof(t)); ++i) {
                     target[i] = source.data[sizeof(t) - 1 - i];
                 }
                 ostream.write(reinterpret_cast<const char *>(target), sizeof(t));
@@ -660,7 +665,7 @@ namespace serialization {
                     Type value;
                     uint8_t data[sizeof(t)];
                 } target;
-                for (int i = 0; i < sizeof(t); ++i) {
+                for (uint8_t i = 0; i < static_cast<uint8_t>(sizeof(t)); ++i) {
                     target.data[i] = source[sizeof(t) - 1 - i];
                 }
                 t = target.value;
@@ -696,11 +701,11 @@ namespace serialization {
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
             if CONSTEXPR17 (details::is_same<Ch, char>::value) {
-                Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.length());
+                Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.length()));
                 ostream.write(reinterpret_cast<const char *>(t.data()), t.length());
             } else {
                 std::string str = xstring2xstring<typename Ch2EncodingType<Ch>::EncodingType, Ch2EncodingType<char>::EncodingType>(t);
-                Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, str.length());
+                Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(str.length()));
                 ostream.write(str.data(), static_cast<std::streamsize>(str.length()));
             }
         }
@@ -711,11 +716,11 @@ namespace serialization {
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
             if CONSTEXPR17 (details::is_same<Ch, char>::value) {
-                t.resize(length);
+                t.resize(static_cast<size_t>(length));
                 istream.read(reinterpret_cast<char *>(t.data()), length);
             } else {
                 std::string str;
-                str.resize(length);
+                str.resize(static_cast<size_t>(length));
                 istream.read(str.data(), length);
                 t = xstring2xstring<Ch2EncodingType<char>::EncodingType, typename Ch2EncodingType<Ch>::EncodingType>(str);
             }
@@ -736,7 +741,7 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             jsonValue.SetArray();
-            jsonValue.GetArray().Reserve(t.size(), allocator);
+            jsonValue.GetArray().Reserve(static_cast<rapidjson::SizeType>(t.size()), allocator);
             for (const T &item: t) {
                 JsonValueType itemJsonValue;
                 Codec<T>::template to_json<typename JsonValueType::ValueType>(allocator, itemJsonValue, item);
@@ -921,7 +926,7 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             jsonValue.SetObject();
-            jsonValue.MemberReserve(t.size());
+            jsonValue.MemberReserve(static_cast<rapidjson::SizeType>(t.size()));
             for (const auto &item: t) {
                 typename JsonValueType::ValueType key;
                 Codec<std::basic_string<Ch>>::template to_json<typename JsonValueType::ValueType>(allocator, key, item.first);
@@ -953,7 +958,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
             for (const auto &item: t) {
                 Codec<std::basic_string<Ch>>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.second);
@@ -966,7 +971,7 @@ namespace serialization {
             assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
-            t.reserve(length);
+            t.reserve(static_cast<size_t>(length));
             for (uint32_t i = 0; i < length; ++i) {
                 std::basic_string<Ch> key;
                 Codec<std::basic_string<Ch>>::template from_binary<isNeedConvert>(istream, key);
@@ -990,7 +995,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
             for (const auto &item: t) {
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<S>::template to_binary<isNeedConvert>(ostream, item.second);
@@ -1003,7 +1008,7 @@ namespace serialization {
             assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
-            t.reserve(length);
+            t.reserve(static_cast<size_t>(length));
             for (uint32_t i = 0; i < length; ++i) {
                 T key;
                 Codec<T>::template from_binary<isNeedConvert>(istream, key);
