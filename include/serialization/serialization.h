@@ -661,6 +661,10 @@ namespace serialization {
             if CONSTEXPR17 (isNeedConvert && sizeof(t) > 1) {
                 uint8_t source[sizeof(t)];
                 istream.read(reinterpret_cast<char *>(source), sizeof(t));
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4701)
+#endif
                 union {// NOLINT(*-pro-type-member-init)
                     Type value;
                     uint8_t data[sizeof(t)];
@@ -669,6 +673,9 @@ namespace serialization {
                     target.data[i] = source[sizeof(t) - 1 - i];
                 }
                 t = target.value;
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
             } else {
                 istream.read(reinterpret_cast<char *>(&t), sizeof(t));
             }
@@ -741,7 +748,7 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             jsonValue.SetArray();
-            jsonValue.GetArray().Reserve(t.size(), allocator);
+            jsonValue.GetArray().Reserve(static_cast<rapidjson::SizeType>(t.size()), allocator);
             for (const T &item: t) {
                 JsonValueType itemJsonValue;
                 Codec<T>::template to_json<typename JsonValueType::ValueType>(allocator, itemJsonValue, item);
@@ -958,7 +965,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
             for (const auto &item: t) {
                 Codec<std::basic_string<Ch>>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.second);
@@ -995,7 +1002,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
             for (const auto &item: t) {
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<S>::template to_binary<isNeedConvert>(ostream, item.second);
@@ -1044,6 +1051,17 @@ namespace serialization {
         }
     };
 
+#ifdef HAS_CXX20
+    template<std::endian targetEndian, class T>
+    void from_binary(std::istream &istream, T &t) {
+        Codec<T>::template from_binary<targetEndian != std::endian::native>(istream, t);
+    }
+
+    template<std::endian targetEndian, class T>
+    void to_binary(std::ostream &ostream, const T &t) {
+        Codec<T>::template to_binary<targetEndian != std::endian::native>(ostream, t);
+    }
+#else
     template<bool isTargetSmallEndian>
     bool getIsNeedConvert() {
         union {
@@ -1071,6 +1089,7 @@ namespace serialization {
             Codec<T>::template to_binary<false>(ostream, t);
         }
     }
+#endif
 
 #ifndef SERIALIZATION_NO_FILESYSTEM
     template<class EncodingType = rapidjson::UTF8<>>
