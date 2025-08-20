@@ -1104,7 +1104,7 @@ namespace serialization {
 #else
         auto mode = "r";
         fp = fopen(path, mode);
-        if (unlikely(fp == nullptr)) {
+        if unlikely(fp == nullptr) {
             throw exceptions::OpenFileException(path, mode);
         }
 #endif
@@ -1128,7 +1128,7 @@ namespace serialization {
 #else
         auto mode = "w";
         fp = fopen(path, mode);
-        if (unlikely(fp == nullptr)) {
+        if unlikely(fp == nullptr) {
             throw exceptions::OpenFileException(path, mode);
         }
 #endif
