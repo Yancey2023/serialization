@@ -50,8 +50,8 @@
     #define likely(expr)   (expr) [[likely]]
     #define unlikely(expr) (expr) [[unlikely]]
 #elif defined(__GNUC__) || defined(__clang__)
-    #define likely(expr)   __builtin_expect(!!(expr), 1)
-    #define unlikely(expr) __builtin_expect(!!(expr), 0)
+    #define likely(expr)   (__builtin_expect(!!(expr), 1))
+    #define unlikely(expr) (__builtin_expect(!!(expr), 0))
 #else
     #define likely(expr)   (!!(expr))
     #define unlikely(expr) (!!(expr))
@@ -71,7 +71,7 @@
 #ifdef CONSTEXPR20
     #undef CONSTEXPR20
 #endif
-#if HAS_CXX20
+#ifdef HAS_CXX20
     #define CONSTEXPR20 constexpr
 #else
     #define CONSTEXPR20 inline
@@ -252,9 +252,9 @@ namespace serialization {
             if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
 #ifdef CHelperDebug
                 throw std::runtime_error("fail to transform string");
-#endif
-                // ReSharper disable once CppDFAUnreachableCode
+#else
                 return std::basic_string<typename TargetEncoding::Ch>();
+#endif
             }
         }
         return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
@@ -271,9 +271,9 @@ namespace serialization {
             if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
 #ifdef CHelperDebug
                 throw std::runtime_error("fail to transform string");
-#endif
-                // ReSharper disable once CppDFAUnreachableCode
+#else
                 return std::basic_string<typename TargetEncoding::Ch>();
+#endif
             }
         }
         return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
@@ -293,9 +293,9 @@ namespace serialization {
             if (!rapidjson::Transcoder<SourceEncoding, TargetEncoding>::Transcode(source, target)) {
 #ifdef CHelperDebug
                 throw std::runtime_error("fail to transform string");
-#endif
-                // ReSharper disable once CppDFAUnreachableCode
+#else
                 return std::basic_string<typename TargetEncoding::Ch>();
+#endif
             }
         }
         return std::basic_string<typename TargetEncoding::Ch>(target.GetString(), target.GetLength());
@@ -393,7 +393,7 @@ namespace serialization {
             const typename JsonValueType::Ch *key) {
         assert(jsonValue.IsObject());
         const typename JsonValueType::ConstMemberIterator it = jsonValue.FindMember(key);
-        if (unlikely(it == jsonValue.MemberEnd())) {
+        if unlikely (it == jsonValue.MemberEnd()) {
             throw exceptions::JsonSerializationKeyException(key);
         }
         return it->value;
@@ -401,7 +401,7 @@ namespace serialization {
 
     template<class JsonValueType>
     const typename JsonValueType::ValueType &check_array_or_throw(const JsonValueType &jsonValue) {
-        if (unlikely(!jsonValue.IsArray())) {
+        if unlikely (!jsonValue.IsArray()) {
             throw exceptions::JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
         }
         return jsonValue;
@@ -513,7 +513,7 @@ namespace serialization {
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            if (unlikely(!jsonValue.IsObject())) {
+            if unlikely (!jsonValue.IsObject()) {
                 throw exceptions::JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
             }
         }
@@ -617,11 +617,11 @@ namespace serialization {
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             RapidJsonTypeHelperType a = 1;
-            if (unlikely(!(static_cast<bool>(details::is_same<Type, float>::value)
+            if unlikely (!(static_cast<bool>(details::is_same<Type, float>::value)
                                    ? jsonValue.IsLosslessFloat()
                            : static_cast<bool>(details::is_same<Type, double>::value)
                                    ? jsonValue.IsLosslessDouble()
-                                   : jsonValue.template Is<RapidJsonTypeHelperType>()))) {
+                                   : jsonValue.template Is<RapidJsonTypeHelperType>())) {
                 if CONSTEXPR17 (details::is_same<Type, bool>::value) {
                     throw exceptions::JsonSerializationTypeException("boolean", getJsonTypeStr(jsonValue.GetType()));
                 } else {
@@ -686,7 +686,7 @@ namespace serialization {
         template<class JsonValueType>
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
-            if (unlikely(!jsonValue.IsString())) {
+            if unlikely (!jsonValue.IsString()) {
                 throw exceptions::JsonSerializationTypeException("string", getJsonTypeStr(jsonValue.GetType()));
             }
             t = jsonString2xstring<typename JsonValueType::EncodingType, typename Ch2EncodingType<Ch>::EncodingType>(jsonValue);
@@ -748,7 +748,7 @@ namespace serialization {
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             assert(t.empty());
-            if (unlikely(!jsonValue.IsArray())) {
+            if unlikely (!jsonValue.IsArray()) {
                 throw exceptions::JsonSerializationTypeException("array", getJsonTypeStr(jsonValue.GetType()));
             }
             t.reserve(jsonValue.Size());
@@ -823,7 +823,7 @@ namespace serialization {
                                    const typename JsonValueType::Ch *key,
                                    const Type &t) {
             assert(jsonValue.IsObject());
-            if (likely(t.has_value())) {
+            if likely (t.has_value()) {
                 typename JsonValueType::ValueType value;
                 Codec<Type>::template to_json<typename JsonValueType::ValueType>(allocator, value, t);
                 assert(!value.IsNull());
@@ -837,7 +837,7 @@ namespace serialization {
                                      Type &t) {
             assert(jsonValue.IsObject());
             const typename JsonValueType::ConstMemberIterator &it = jsonValue.FindMember(key.c_str());
-            if (unlikely(it == jsonValue.MemberEnd())) {
+            if unlikely (it == jsonValue.MemberEnd()) {
                 t = std::nullopt;
                 return;
             }
@@ -848,7 +848,7 @@ namespace serialization {
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
             Codec<bool>::template to_binary<isNeedConvert>(ostream, t.has_value());
-            if (likely(t.has_value())) {
+            if likely (t.has_value()) {
                 Codec<T>::template to_binary<isNeedConvert>(ostream, t.value());
             }
         }
@@ -858,7 +858,7 @@ namespace serialization {
                                 Type &t) {
             bool has_value;
             Codec<bool>::template from_binary<isNeedConvert>(istream, has_value);
-            if (likely(has_value)) {
+            if likely (has_value) {
                 t = std::make_optional<T>();
                 Codec<T>::template from_binary<isNeedConvert>(istream, t.value());
             } else {
@@ -935,7 +935,7 @@ namespace serialization {
         static void from_json(const JsonValueType &jsonValue,
                               Type &t) {
             assert(t.empty());
-            if (unlikely(!jsonValue.IsObject())) {
+            if unlikely (!jsonValue.IsObject()) {
                 throw exceptions::JsonSerializationTypeException("object", getJsonTypeStr(jsonValue.GetType()));
             }
             t.reserve(jsonValue.MemberCount());
@@ -1074,7 +1074,7 @@ namespace serialization {
 #ifdef _WIN32
         auto mode = "rb";
         const errno_t err = fopen_s(&fp, path, mode);
-        if (unlikely(err != 0)) {
+        if unlikely (err != 0) {
             throw exceptions::OpenFileException(path, mode, err);
         }
 #else
@@ -1098,7 +1098,7 @@ namespace serialization {
 #ifdef _WIN32
         auto mode = "wb";
         errno_t err = fopen_s(&fp, path, mode);
-        if (unlikely(err != 0)) {
+        if unlikely (err != 0) {
             throw exceptions::OpenFileException(path, mode, err);
         }
 #else
