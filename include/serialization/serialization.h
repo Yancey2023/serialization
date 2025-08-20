@@ -1052,14 +1052,14 @@ namespace serialization {
     };
 
 #ifdef HAS_CXX20
-    template<std::endian targetEndian, class T>
+    template<class T, std::endian endian = std::endian::little>
     void from_binary(std::istream &istream, T &t) {
-        Codec<T>::template from_binary<targetEndian != std::endian::native>(istream, t);
+        Codec<T>::template from_binary<endian != std::endian::native>(istream, t);
     }
 
-    template<std::endian targetEndian, class T>
+    template<class T, std::endian endian = std::endian::little>
     void to_binary(std::ostream &ostream, const T &t) {
-        Codec<T>::template to_binary<targetEndian != std::endian::native>(ostream, t);
+        Codec<T>::template to_binary<endian != std::endian::native>(ostream, t);
     }
 #else
     template<bool isTargetSmallEndian>
