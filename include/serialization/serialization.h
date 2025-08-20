@@ -720,7 +720,7 @@ namespace serialization {
                 istream.read(reinterpret_cast<char *>(t.data()), length);
             } else {
                 std::string str;
-                str.resize(static_cast<size_t>(length));
+                str.resize(length);
                 istream.read(str.data(), length);
                 t = xstring2xstring<Ch2EncodingType<char>::EncodingType, typename Ch2EncodingType<Ch>::EncodingType>(str);
             }
@@ -741,7 +741,7 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             jsonValue.SetArray();
-            jsonValue.GetArray().Reserve(static_cast<rapidjson::SizeType>(t.size()), allocator);
+            jsonValue.GetArray().Reserve(t.size(), allocator);
             for (const T &item: t) {
                 JsonValueType itemJsonValue;
                 Codec<T>::template to_json<typename JsonValueType::ValueType>(allocator, itemJsonValue, item);
@@ -926,7 +926,7 @@ namespace serialization {
                             JsonValueType &jsonValue,
                             const Type &t) {
             jsonValue.SetObject();
-            jsonValue.MemberReserve(static_cast<rapidjson::SizeType>(t.size()));
+            jsonValue.MemberReserve(t.size());
             for (const auto &item: t) {
                 typename JsonValueType::ValueType key;
                 Codec<std::basic_string<Ch>>::template to_json<typename JsonValueType::ValueType>(allocator, key, item.first);
@@ -958,7 +958,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
             for (const auto &item: t) {
                 Codec<std::basic_string<Ch>>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.second);
@@ -971,7 +971,7 @@ namespace serialization {
             assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
-            t.reserve(static_cast<size_t>(length));
+            t.reserve(length);
             for (uint32_t i = 0; i < length; ++i) {
                 std::basic_string<Ch> key;
                 Codec<std::basic_string<Ch>>::template from_binary<isNeedConvert>(istream, key);
@@ -995,7 +995,7 @@ namespace serialization {
         template<bool isNeedConvert>
         static void to_binary(std::ostream &ostream,
                               const Type &t) {
-            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, static_cast<uint32_t>(t.size()));
+            Codec<uint32_t>::template to_binary<isNeedConvert>(ostream, t.size());
             for (const auto &item: t) {
                 Codec<T>::template to_binary<isNeedConvert>(ostream, item.first);
                 Codec<S>::template to_binary<isNeedConvert>(ostream, item.second);
@@ -1008,7 +1008,7 @@ namespace serialization {
             assert(t.empty());
             uint32_t length;
             Codec<uint32_t>::template from_binary<isNeedConvert>(istream, length);
-            t.reserve(static_cast<size_t>(length));
+            t.reserve(length);
             for (uint32_t i = 0; i < length; ++i) {
                 T key;
                 Codec<T>::template from_binary<isNeedConvert>(istream, key);
