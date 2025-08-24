@@ -655,16 +655,16 @@ namespace serialization {
             }
         }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4701)
+#endif
         template<bool isNeedConvert>
         static void from_binary(std::istream &istream,
                                 Type &t) {
             if CONSTEXPR17 (isNeedConvert && sizeof(t) > 1) {
                 uint8_t source[sizeof(t)];
                 istream.read(reinterpret_cast<char *>(source), sizeof(t));
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4701)
-#endif
                 union {// NOLINT(*-pro-type-member-init)
                     Type value;
                     uint8_t data[sizeof(t)];
@@ -673,14 +673,14 @@ namespace serialization {
                     target.data[i] = source[sizeof(t) - 1 - i];
                 }
                 t = target.value;
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
             } else {
                 istream.read(reinterpret_cast<char *>(&t), sizeof(t));
             }
         }
     };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     template<class Ch>
     struct Codec<std::basic_string<Ch>> : BaseCodec<std::basic_string<Ch>> {
@@ -1104,7 +1104,7 @@ namespace serialization {
 #else
         auto mode = "r";
         fp = fopen(path, mode);
-        if unlikely(fp == nullptr) {
+        if unlikely (fp == nullptr) {
             throw exceptions::OpenFileException(path, mode);
         }
 #endif
@@ -1128,7 +1128,7 @@ namespace serialization {
 #else
         auto mode = "w";
         fp = fopen(path, mode);
-        if unlikely(fp == nullptr) {
+        if unlikely (fp == nullptr) {
             throw exceptions::OpenFileException(path, mode);
         }
 #endif
